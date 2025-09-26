@@ -58,15 +58,21 @@ def _format_resource_name(
     Returns:
         Consistently formatted resource identifier
     """
-    base_resource = f"{resource_type}: {resource_name}"
+    # Sanitize inputs to prevent injection attacks
+    safe_resource_type = str(resource_type).replace("|", "-").replace(":", "-")
+    safe_resource_name = str(resource_name).replace("|", "-").replace(":", "-")
+    
+    base_resource = f"{safe_resource_type}: {safe_resource_name}"
 
     # Add service context if provided and not already a service resource
     if service_name and resource_type.lower() != "service":
-        base_resource += f" | Service: {service_name}"
+        safe_service_name = str(service_name).replace("|", "-").replace(":", "-")
+        base_resource += f" | Service: {safe_service_name}"
 
     # Add cluster context if provided and not already a cluster resource
     if cluster_name and resource_type.lower() not in ["service", "cluster"]:
-        base_resource += f" | Cluster: {cluster_name}"
+        safe_cluster_name = str(cluster_name).replace("|", "-").replace(":", "-")
+        base_resource += f" | Cluster: {safe_cluster_name}"
 
     return base_resource
 
