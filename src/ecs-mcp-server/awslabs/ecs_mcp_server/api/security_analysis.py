@@ -40,29 +40,34 @@ from .troubleshooting_tools.utils import find_clusters, find_task_definitions
 logger = logging.getLogger(__name__)
 
 
-def _format_resource_name(resource_type: str, resource_name: str, service_name: Optional[str] = None, cluster_name: Optional[str] = None) -> str:  # noqa: E501
+def _format_resource_name(
+    resource_type: str,
+    resource_name: str,
+    service_name: Optional[str] = None,
+    cluster_name: Optional[str] = None,
+) -> str:  # noqa: E501
     """
     Format resource names consistently across all security recommendations.
-    
+
     Args:
         resource_type: Type of resource (Container, Service, Task Definition, etc.)
         resource_name: Name of the specific resource
         service_name: Optional service name for context
         cluster_name: Optional cluster name for context
-        
+
     Returns:
         Consistently formatted resource identifier
     """
     base_resource = f"{resource_type}: {resource_name}"
-    
+
     # Add service context if provided and not already a service resource
     if service_name and resource_type.lower() != "service":
         base_resource += f" | Service: {service_name}"
-    
+
     # Add cluster context if provided and not already a cluster resource
     if cluster_name and resource_type.lower() not in ["service", "cluster"]:
         base_resource += f" | Cluster: {cluster_name}"
-    
+
     return base_resource
 
 
@@ -1185,7 +1190,9 @@ class SecurityAnalyzer:
                             "title": "Configure Memory Limits for EC2 Container (Required)",
                             "severity": "High",
                             "category": "resource_management",
-                            "resource": _format_resource_name("Container", container.get('name', 'unknown'), service_name),  # noqa: E501
+                            "resource": _format_resource_name(
+                                "Container", container.get("name", "unknown"), service_name
+                            ),  # noqa: E501
                             "issue": f"Container {container.get('name', 'unknown')} has no memory limits configured on EC2 launch type",  # noqa: E501
                             "recommendation": "Set memory limits to prevent resource exhaustion on EC2 instances - this is required for EC2 launch type",  # noqa: E501
                         }
@@ -1556,7 +1563,9 @@ class SecurityAnalyzer:
                             "title": f"Review Dangerous Capability: {cap}",
                             "severity": "High",
                             "category": "container_security",
-                            "resource": _format_resource_name("Container", container_name, service_name),  # noqa: E501
+                            "resource": _format_resource_name(
+                                "Container", container_name, service_name
+                            ),  # noqa: E501
                             "issue": f"Container has dangerous capability {cap} which increases security risk",  # noqa: E501
                             "recommendation": "Remove unnecessary capabilities and use least privilege principle",  # noqa: E501
                         }
@@ -1569,7 +1578,9 @@ class SecurityAnalyzer:
                         "title": "Enable Init Process for Signal Handling",
                         "severity": "Medium",
                         "category": "container_security",
-                        "resource": _format_resource_name("Container", container_name, service_name),  # noqa: E501
+                        "resource": _format_resource_name(
+                            "Container", container_name, service_name
+                        ),  # noqa: E501
                         "issue": "Container lacks init process, potentially causing zombie processes and signal handling issues",  # noqa: E501
                         "recommendation": "Enable initProcessEnabled to properly handle signals and prevent zombie processes",  # noqa: E501
                     }
@@ -1585,7 +1596,9 @@ class SecurityAnalyzer:
                             "title": "Review Large Tmpfs Mount Size",
                             "severity": "Medium",
                             "category": "container_security",
-                            "resource": _format_resource_name("Container", container_name, service_name),  # noqa: E501
+                            "resource": _format_resource_name(
+                                "Container", container_name, service_name
+                            ),  # noqa: E501
                             "issue": f"Tmpfs mount size {size} bytes is very large and could lead to memory exhaustion",  # noqa: E501
                             "recommendation": "Limit tmpfs mount sizes to prevent memory-based DoS attacks",  # noqa: E501
                         }
@@ -1599,7 +1612,9 @@ class SecurityAnalyzer:
                         "title": "Review Large Shared Memory Size",
                         "severity": "Medium",
                         "category": "container_security",
-                        "resource": _format_resource_name("Container", container_name, service_name),  # noqa: E501
+                        "resource": _format_resource_name(
+                            "Container", container_name, service_name
+                        ),  # noqa: E501
                         "issue": f"Shared memory size {shared_memory_size} bytes is large and could be exploited",  # noqa: E501
                         "recommendation": "Limit shared memory size to minimum required for application functionality",  # noqa: E501
                     }
@@ -1764,7 +1779,9 @@ class SecurityAnalyzer:
                                 "title": "Use AWS Secrets Manager for Sensitive Data",
                                 "severity": "High",
                                 "category": "secrets",
-                                "resource": _format_resource_name("Container", container_name, service_name),  # noqa: E501
+                                "resource": _format_resource_name(
+                                    "Container", container_name, service_name
+                                ),  # noqa: E501
                                 "issue": f"Environment variable {env_name} contains hardcoded sensitive data - immediate credential exposure risk",  # noqa: E501
                                 "recommendation": "Immediately migrate to AWS Secrets Manager to prevent credential theft and unauthorized access",  # noqa: E501
                             }
@@ -1788,7 +1805,9 @@ class SecurityAnalyzer:
                             "title": "Migrate Sensitive Environment Variables to Secrets",
                             "severity": "High",
                             "category": "secrets",
-                            "resource": _format_resource_name("Container", container_name, service_name),  # noqa: E501
+                            "resource": _format_resource_name(
+                                "Container", container_name, service_name
+                            ),  # noqa: E501
                             "issue": "Sensitive data detected in environment variables - visible in process lists, logs, and container metadata",  # noqa: E501
                             "recommendation": "Immediately migrate sensitive data to AWS Secrets Manager or Parameter Store to prevent credential exposure",  # noqa: E501
                         }
@@ -1811,7 +1830,9 @@ class SecurityAnalyzer:
                                     "title": "Use Secrets Manager for Sensitive Data",
                                     "severity": "Medium",
                                     "category": "secrets",
-                                    "resource": _format_resource_name("Container", container_name, service_name),  # noqa: E501
+                                    "resource": _format_resource_name(
+                                        "Container", container_name, service_name
+                                    ),  # noqa: E501
                                     "issue": f"Secret {secret_name} uses Parameter Store instead of Secrets Manager for sensitive data",  # noqa: E501
                                     "recommendation": "Use AWS Secrets Manager for passwords, API keys, and credentials for automatic rotation and enhanced security",  # noqa: E501
                                 }
@@ -2315,7 +2336,9 @@ class SecurityAnalyzer:
                                 "title": "PCI DSS: Remove Default Passwords",
                                 "severity": "High",
                                 "category": "pci_compliance",
-                                "resource": _format_resource_name("Container", container.get('name', 'unknown'), service_name),  # noqa: E501
+                                "resource": _format_resource_name(
+                                    "Container", container.get("name", "unknown"), service_name
+                                ),  # noqa: E501
                                 "issue": "Default password detected in environment variables",
                                 "recommendation": "Replace default passwords with strong, unique credentials stored in AWS Secrets Manager",  # noqa: E501
                             }
@@ -2631,7 +2654,9 @@ class SecurityAnalyzer:
                             "title": f"Remove Dangerous Capability: {cap}",
                             "severity": "High",
                             "category": "runtime_security",
-                            "resource": _format_resource_name("Container", container_name, service_name),  # noqa: E501
+                            "resource": _format_resource_name(
+                                "Container", container_name, service_name
+                            ),  # noqa: E501
                             "issue": f"Container has dangerous capability {cap} which increases attack surface",  # noqa: E501
                             "recommendation": (
                                 "Remove unnecessary capabilities and follow principle of least privilege"  # noqa: E501
@@ -2646,7 +2671,9 @@ class SecurityAnalyzer:
                         "title": "Configure Seccomp Security Profile",
                         "severity": "High",
                         "category": "runtime_security",
-                        "resource": _format_resource_name("Container", container_name, service_name),  # noqa: E501
+                        "resource": _format_resource_name(
+                            "Container", container_name, service_name
+                        ),  # noqa: E501
                         "issue": "Container lacks seccomp profile, allowing unrestricted system calls that could be exploited by attackers",  # noqa: E501
                         "recommendation": "Configure a seccomp profile to restrict system calls and reduce attack surface",  # noqa: E501
                         "implementation_steps": [
@@ -2670,7 +2697,9 @@ class SecurityAnalyzer:
                         "title": "Configure AppArmor Security Profile",
                         "severity": "Medium",
                         "category": "runtime_security",
-                        "resource": _format_resource_name("Container", container_name, service_name),  # noqa: E501
+                        "resource": _format_resource_name(
+                            "Container", container_name, service_name
+                        ),  # noqa: E501
                         "issue": "Container lacks AppArmor profile, missing mandatory access control protection",  # noqa: E501
                         "recommendation": "Configure AppArmor profile for mandatory access control and additional security layer",  # noqa: E501
                         "implementation_steps": [
@@ -2691,7 +2720,9 @@ class SecurityAnalyzer:
                         "title": "Enable No New Privileges Flag",
                         "severity": "High",
                         "category": "runtime_security",
-                        "resource": _format_resource_name("Container", container_name, service_name),  # noqa: E501
+                        "resource": _format_resource_name(
+                            "Container", container_name, service_name
+                        ),  # noqa: E501
                         "issue": "Container can gain new privileges during execution, enabling privilege escalation attacks",  # noqa: E501
                         "recommendation": "Enable noNewPrivileges flag to prevent privilege escalation within the container",  # noqa: E501
                         "implementation_steps": [
@@ -2814,7 +2845,9 @@ class SecurityAnalyzer:
                                             "title": "Address Critical Vulnerabilities in Container Image",  # noqa: E501
                                             "severity": "Critical",
                                             "category": "image_security",
-                                            "resource": _format_resource_name("Container Image", image, service_name),  # noqa: E501
+                                            "resource": _format_resource_name(
+                                                "Container Image", image, service_name
+                                            ),  # noqa: E501
                                             "issue": f"Container image has {critical_count} critical vulnerabilities that pose immediate security risks",  # noqa: E501
                                             "recommendation": "Immediately update base image or packages to address critical vulnerabilities before deployment",  # noqa: E501
                                             "implementation_steps": [
@@ -2837,7 +2870,9 @@ class SecurityAnalyzer:
                                             "title": "Address High Severity Vulnerabilities in Container Image",  # noqa: E501
                                             "severity": "High",
                                             "category": "image_security",
-                                            "resource": _format_resource_name("Container Image", image, service_name),  # noqa: E501
+                                            "resource": _format_resource_name(
+                                                "Container Image", image, service_name
+                                            ),  # noqa: E501
                                             "issue": f"Container image has {high_count} high severity vulnerabilities that should be addressed promptly",  # noqa: E501
                                             "recommendation": "Update container image to address high severity vulnerabilities within next maintenance window",  # noqa: E501
                                             "implementation_steps": [
@@ -2860,7 +2895,9 @@ class SecurityAnalyzer:
                                             "title": "Review Medium Severity Vulnerabilities",
                                             "severity": "Medium",
                                             "category": "image_security",
-                                            "resource": _format_resource_name("Container Image", image, service_name),  # noqa: E501
+                                            "resource": _format_resource_name(
+                                                "Container Image", image, service_name
+                                            ),  # noqa: E501
                                             "issue": f"Container image has {medium_count} medium severity vulnerabilities that should be reviewed",  # noqa: E501
                                             "recommendation": "Review and plan remediation for medium severity vulnerabilities during regular maintenance",  # noqa: E501
                                             "implementation_steps": [
@@ -2881,7 +2918,9 @@ class SecurityAnalyzer:
                                         "title": "Initiate ECR Vulnerability Scan",
                                         "severity": "Medium",
                                         "category": "image_security",
-                                        "resource": _format_resource_name("Container Image", image, service_name),  # noqa: E501
+                                        "resource": _format_resource_name(
+                                            "Container Image", image, service_name
+                                        ),  # noqa: E501
                                         "issue": "Container image has not been scanned for vulnerabilities",  # noqa: E501
                                         "recommendation": "Initiate vulnerability scan to identify potential security issues",  # noqa: E501
                                         "implementation_steps": [
@@ -3807,7 +3846,9 @@ class SecurityAnalyzer:
                             "title": "Configure Secure Tmpfs Mount Options",
                             "severity": "Medium",
                             "category": "storage_security",
-                            "resource": _format_resource_name("Container", container_name, service_name),  # noqa: E501
+                            "resource": _format_resource_name(
+                                "Container", container_name, service_name
+                            ),  # noqa: E501
                             "issue": "Tmpfs mount lacks noexec option, potentially allowing execution of malicious code",  # noqa: E501
                             "recommendation": "Add noexec, nosuid, and nodev options to tmpfs mounts for enhanced security",  # noqa: E501
                             "implementation_steps": [
@@ -3829,7 +3870,9 @@ class SecurityAnalyzer:
                             "title": "Review Tmpfs Size Allocation",
                             "severity": "Low",
                             "category": "storage_security",
-                            "resource": _format_resource_name("Container", container_name, service_name),  # noqa: E501
+                            "resource": _format_resource_name(
+                                "Container", container_name, service_name
+                            ),  # noqa: E501
                             "issue": f"Large tmpfs allocation ({tmpfs_size}MB) may impact system resources",  # noqa: E501
                             "recommendation": "Review tmpfs size allocation to prevent resource exhaustion attacks",  # noqa: E501
                             "implementation_steps": [
@@ -3852,7 +3895,9 @@ class SecurityAnalyzer:
                         "title": "Review Shared Memory Security Configuration",
                         "severity": "Medium",
                         "category": "storage_security",
-                        "resource": _format_resource_name("Container", container_name, service_name),  # noqa: E501
+                        "resource": _format_resource_name(
+                            "Container", container_name, service_name
+                        ),  # noqa: E501
                         "issue": f"Container uses {shared_memory_size} bytes of shared memory which should be secured",  # noqa: E501
                         "recommendation": "Ensure shared memory usage is necessary and properly secured against information disclosure",  # noqa: E501
                         "implementation_steps": [
@@ -3873,7 +3918,9 @@ class SecurityAnalyzer:
                             "title": "Validate Shared Memory Size Allocation",
                             "severity": "Medium",
                             "category": "storage_security",
-                            "resource": _format_resource_name("Container", container_name, service_name),  # noqa: E501
+                            "resource": _format_resource_name(
+                                "Container", container_name, service_name
+                            ),  # noqa: E501
                             "issue": f"Large shared memory allocation ({shared_memory_size} bytes) may pose security risks",  # noqa: E501
                             "recommendation": "Validate shared memory size requirements and implement appropriate limits",  # noqa: E501
                             "implementation_steps": [
