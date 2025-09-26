@@ -1822,7 +1822,7 @@ class TestSecurityAnalysisAPI:
                 "clusterName": "test-cluster",
                 "configuration": {
                     "executeCommandConfiguration": {
-                        "kmsKeyId": "arn:aws:kms:us-east-1:000000000000:key/00000000-0000-0000-0000-000000000000",
+                        "kmsKeyId": "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012",
                         # Missing logging
                     }
                 },
