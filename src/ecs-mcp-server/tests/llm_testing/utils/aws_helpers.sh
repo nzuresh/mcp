@@ -245,4 +245,3 @@ check_logs_for_errors() {
 
     echo "$logs" | grep -i error | wc -l
 }
-
