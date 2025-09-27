@@ -507,6 +507,27 @@ class SecurityAnalyzer:
             "compliance": self._analyze_compliance_security,
         }
 
+    def _is_valid_ecr_image(self, image: str) -> bool:
+        """
+        Securely validate if an image URI is a valid ECR image.
+        
+        Uses proper regex pattern matching to prevent URL substring sanitization vulnerabilities.
+        
+        Args:
+            image: The container image URI to validate
+            
+        Returns:
+            bool: True if the image is a valid ECR image, False otherwise
+        """
+        if not image or image.startswith("https://"):
+            return False
+            
+        # ECR image format: [account-id].dkr.ecr.[region].amazonaws.com/[repository][:tag]
+        # Use strict regex pattern to validate ECR URI structure
+        ecr_pattern = r'^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com\/[a-zA-Z0-9][a-zA-Z0-9._/-]*(?::[a-zA-Z0-9._-]+)?$'
+        
+        return bool(re.match(ecr_pattern, image))
+
     def _format_resource_name(
         self,
         resource_type: str,
@@ -1497,14 +1518,7 @@ class SecurityAnalyzer:
         is_docker_hub = image.startswith("docker.io/") or (
             image.count(":") == 1 and image.count("/") == 0 and not image.startswith("localhost")
         )
-        is_private_ecr = (
-            image.startswith("https://") is False
-            and ".dkr.ecr." in image
-            and ".amazonaws.com/" in image
-            and image.count(".amazonaws.com") == 1
-            if "/" in image
-            else False
-        )
+        is_private_ecr = self._is_valid_ecr_image(image)
 
         if is_public_ecr or is_docker_hub or not is_private_ecr:
             recommendations.append(
@@ -2567,13 +2581,7 @@ class SecurityAnalyzer:
             return recommendations
 
         # Check for image scanning and security
-        is_ecr_image = (
-            image.startswith("https://") is False
-            and ".dkr.ecr." in image
-            and ".amazonaws.com/" in image
-            and image.count(".amazonaws.com") == 1
-            and "/" in image
-        )
+        is_ecr_image = self._is_valid_ecr_image(image)
         if is_ecr_image:
             # This is an ECR image - recommend image scanning
             recommendations.append(
@@ -2801,13 +2809,7 @@ class SecurityAnalyzer:
         image = container.get("image", "")
 
         # Check if image is from ECR
-        is_ecr_image = (
-            image.startswith("https://") is False
-            and ".dkr.ecr." in image
-            and ".amazonaws.com/" in image
-            and image.count(".amazonaws.com") == 1
-            and "/" in image
-        )
+        is_ecr_image = self._is_valid_ecr_image(image)
         if is_ecr_image:
             try:
                 # Extract repository name from ECR image URI
@@ -3316,13 +3318,7 @@ class SecurityAnalyzer:
         image = container.get("image", "")
 
         # Check for image signing (Docker Content Trust / Notary)
-        is_ecr_image = (
-            image.startswith("https://") is False
-            and ".dkr.ecr." in image
-            and ".amazonaws.com/" in image
-            and image.count(".amazonaws.com") == 1
-            and "/" in image
-        )
+        is_ecr_image = self._is_valid_ecr_image(image)
         if is_ecr_image:
             # ECR image - check for image signing
             recommendations.append(
