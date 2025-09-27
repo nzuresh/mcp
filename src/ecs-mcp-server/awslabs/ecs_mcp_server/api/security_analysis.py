@@ -1498,10 +1498,10 @@ class SecurityAnalyzer:
             image.count(":") == 1 and image.count("/") == 0 and not image.startswith("localhost")
         )
         is_private_ecr = (
-            image.startswith("https://") is False and
-            ".dkr.ecr." in image and
-            ".amazonaws.com/" in image and
-            image.count(".amazonaws.com") == 1
+            image.startswith("https://") is False
+            and ".dkr.ecr." in image
+            and ".amazonaws.com/" in image
+            and image.count(".amazonaws.com") == 1
             if "/" in image
             else False
         )
@@ -2568,11 +2568,11 @@ class SecurityAnalyzer:
 
         # Check for image scanning and security
         is_ecr_image = (
-            image.startswith("https://") is False and
-            ".dkr.ecr." in image and
-            ".amazonaws.com/" in image and
-            image.count(".amazonaws.com") == 1 and
-            "/" in image
+            image.startswith("https://") is False
+            and ".dkr.ecr." in image
+            and ".amazonaws.com/" in image
+            and image.count(".amazonaws.com") == 1
+            and "/" in image
         )
         if is_ecr_image:
             # This is an ECR image - recommend image scanning
@@ -2802,11 +2802,11 @@ class SecurityAnalyzer:
 
         # Check if image is from ECR
         is_ecr_image = (
-            image.startswith("https://") is False and
-            ".dkr.ecr." in image and
-            ".amazonaws.com/" in image and
-            image.count(".amazonaws.com") == 1 and
-            "/" in image
+            image.startswith("https://") is False
+            and ".dkr.ecr." in image
+            and ".amazonaws.com/" in image
+            and image.count(".amazonaws.com") == 1
+            and "/" in image
         )
         if is_ecr_image:
             try:
@@ -3317,11 +3317,11 @@ class SecurityAnalyzer:
 
         # Check for image signing (Docker Content Trust / Notary)
         is_ecr_image = (
-            image.startswith("https://") is False and
-            ".dkr.ecr." in image and
-            ".amazonaws.com/" in image and
-            image.count(".amazonaws.com") == 1 and
-            "/" in image
+            image.startswith("https://") is False
+            and ".dkr.ecr." in image
+            and ".amazonaws.com/" in image
+            and image.count(".amazonaws.com") == 1
+            and "/" in image
         )
         if is_ecr_image:
             # ECR image - check for image signing
