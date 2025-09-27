@@ -510,22 +510,25 @@ class SecurityAnalyzer:
     def _is_valid_ecr_image(self, image: str) -> bool:
         """
         Securely validate if an image URI is a valid ECR image.
-        
+
         Uses proper regex pattern matching to prevent URL substring sanitization vulnerabilities.
-        
+
         Args:
             image: The container image URI to validate
-            
+
         Returns:
             bool: True if the image is a valid ECR image, False otherwise
         """
         if not image or image.startswith("https://"):
             return False
-            
+
         # ECR image format: [account-id].dkr.ecr.[region].amazonaws.com/[repository][:tag]
         # Use strict regex pattern to validate ECR URI structure
-        ecr_pattern = r'^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com\/[a-zA-Z0-9][a-zA-Z0-9._/-]*(?::[a-zA-Z0-9._-]+)?$'
-        
+        ecr_pattern = (
+            r"^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com\/"
+            r"[a-zA-Z0-9][a-zA-Z0-9._/-]*(?::[a-zA-Z0-9._-]+)?$"
+        )
+
         return bool(re.match(ecr_pattern, image))
 
     def _format_resource_name(

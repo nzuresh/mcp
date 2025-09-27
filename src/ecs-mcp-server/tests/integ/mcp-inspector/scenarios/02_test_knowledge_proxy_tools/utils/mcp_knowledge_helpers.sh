@@ -230,4 +230,3 @@ validate_mcp_knowledge_prerequisites() {
         return 1
     fi
 }
-

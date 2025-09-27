@@ -289,4 +289,3 @@ print_validation_summary() {
         return 1
     fi
 }
-

@@ -196,4 +196,3 @@ aws logs describe-log-groups --log-group-name-prefix "/ecs/${CLUSTER_NAME}" --qu
 done
 
 echo "Cleanup completed."
-

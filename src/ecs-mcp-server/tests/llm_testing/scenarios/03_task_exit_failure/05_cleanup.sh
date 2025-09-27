@@ -81,4 +81,3 @@ echo "Step 3: Deleting CloudWatch log group $LOG_GROUP..."
 aws logs delete-log-group --log-group-name $LOG_GROUP 2>/dev/null || true
 
 echo "Cleanup complete. All resources have been removed."
-

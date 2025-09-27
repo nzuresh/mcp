@@ -92,4 +92,3 @@ echo "Step 3: Deleting ECS cluster..."
 aws ecs delete-cluster --cluster $CLUSTER_NAME
 
 echo "Cleanup complete. All resources have been removed."
-

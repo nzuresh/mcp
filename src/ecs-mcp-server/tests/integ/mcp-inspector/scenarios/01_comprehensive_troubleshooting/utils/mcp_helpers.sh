@@ -291,4 +291,3 @@ validate_mcp_prerequisites() {
         return 1
     fi
 }
-

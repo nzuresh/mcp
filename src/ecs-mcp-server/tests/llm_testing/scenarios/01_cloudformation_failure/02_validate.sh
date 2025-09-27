@@ -52,4 +52,3 @@ else
   echo "❌ Stack is not in a failed state. Current status: $STATUS"
   echo "Wait a few more minutes for the failure to occur."
 fi
-

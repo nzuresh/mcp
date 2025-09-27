@@ -28,4 +28,3 @@ echo -e "${GREEN}✅ Prerequisites validation completed!${NC}"
 echo ""
 
 exit 0
-
