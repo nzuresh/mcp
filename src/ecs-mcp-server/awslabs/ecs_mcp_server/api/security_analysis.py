@@ -1380,7 +1380,7 @@ class SecurityAnalyzer:
 
         # Check for latest tag
         image = container.get("image", "")
-        if image.endswith(":latest") or ":" not in image:
+        if image.endswith(":latest") or image.count(":") == 0:
             recommendations.append(
                 {
                     "title": "Avoid Latest Tag in Container Images",
@@ -1495,10 +1495,13 @@ class SecurityAnalyzer:
         # Check for private registry
         is_public_ecr = image.startswith("public.ecr.aws/")
         is_docker_hub = image.startswith("docker.io/") or (
-            ":" in image and "/" not in image.split(":")[0]
+            image.count(":") == 1 and image.count("/") == 0 and not image.startswith("localhost")
         )
         is_private_ecr = (
-            ".dkr.ecr." in image and image.endswith(".amazonaws.com/" + image.split("/")[-1])
+            image.startswith("https://") is False and 
+            ".dkr.ecr." in image and 
+            ".amazonaws.com/" in image and 
+            image.count(".amazonaws.com") == 1
             if "/" in image
             else False
         )
@@ -2564,7 +2567,13 @@ class SecurityAnalyzer:
             return recommendations
 
         # Check for image scanning and security
-        is_ecr_image = ".dkr.ecr." in image and image.count(".amazonaws.com") == 1 and "/" in image
+        is_ecr_image = (
+            image.startswith("https://") is False and
+            ".dkr.ecr." in image and 
+            ".amazonaws.com/" in image and 
+            image.count(".amazonaws.com") == 1 and 
+            "/" in image
+        )
         if is_ecr_image:
             # This is an ECR image - recommend image scanning
             recommendations.append(
@@ -2792,7 +2801,13 @@ class SecurityAnalyzer:
         image = container.get("image", "")
 
         # Check if image is from ECR
-        is_ecr_image = ".dkr.ecr." in image and image.count(".amazonaws.com") == 1 and "/" in image
+        is_ecr_image = (
+            image.startswith("https://") is False and
+            ".dkr.ecr." in image and 
+            ".amazonaws.com/" in image and 
+            image.count(".amazonaws.com") == 1 and 
+            "/" in image
+        )
         if is_ecr_image:
             try:
                 # Extract repository name from ECR image URI
@@ -3301,7 +3316,13 @@ class SecurityAnalyzer:
         image = container.get("image", "")
 
         # Check for image signing (Docker Content Trust / Notary)
-        is_ecr_image = ".dkr.ecr." in image and image.count(".amazonaws.com") == 1 and "/" in image
+        is_ecr_image = (
+            image.startswith("https://") is False and
+            ".dkr.ecr." in image and 
+            ".amazonaws.com/" in image and 
+            image.count(".amazonaws.com") == 1 and 
+            "/" in image
+        )
         if is_ecr_image:
             # ECR image - check for image signing
             recommendations.append(
@@ -3458,7 +3479,7 @@ class SecurityAnalyzer:
             )
 
         # Check for image immutability
-        if image.endswith(":latest") or ":" not in image:
+        if image.endswith(":latest") or image.count(":") == 0:
             recommendations.append(
                 {
                     "title": "Use Immutable Image Tags with Digest",
