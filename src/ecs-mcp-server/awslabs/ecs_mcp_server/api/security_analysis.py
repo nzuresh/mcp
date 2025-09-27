@@ -1493,13 +1493,17 @@ class SecurityAnalyzer:
             )
 
         # Check for private registry
-        if (
-            image.startswith("public.ecr.aws/")
-            or "public.ecr.aws/" in image
-            or image.startswith("docker.io/")
-            or "docker.io/" in image
-            or not any(registry in image for registry in [".dkr.ecr.", ".amazonaws.com/"])
-        ):
+        is_public_ecr = image.startswith("public.ecr.aws/")
+        is_docker_hub = image.startswith("docker.io/") or (
+            ":" in image and "/" not in image.split(":")[0]
+        )
+        is_private_ecr = (
+            ".dkr.ecr." in image and image.endswith(".amazonaws.com/" + image.split("/")[-1])
+            if "/" in image
+            else False
+        )
+
+        if is_public_ecr or is_docker_hub or not is_private_ecr:
             recommendations.append(
                 {
                     "title": "Consider Using Private Container Registry",
@@ -2560,7 +2564,8 @@ class SecurityAnalyzer:
             return recommendations
 
         # Check for image scanning and security
-        if ".dkr.ecr." in image and ".amazonaws.com/" in image:
+        is_ecr_image = ".dkr.ecr." in image and image.count(".amazonaws.com") == 1 and "/" in image
+        if is_ecr_image:
             # This is an ECR image - recommend image scanning
             recommendations.append(
                 {
@@ -2787,7 +2792,8 @@ class SecurityAnalyzer:
         image = container.get("image", "")
 
         # Check if image is from ECR
-        if ".dkr.ecr." in image and ".amazonaws.com/" in image:
+        is_ecr_image = ".dkr.ecr." in image and image.count(".amazonaws.com") == 1 and "/" in image
+        if is_ecr_image:
             try:
                 # Extract repository name from ECR image URI
                 # Format: account.dkr.ecr.region.amazonaws.com/repository:tag
@@ -3295,7 +3301,8 @@ class SecurityAnalyzer:
         image = container.get("image", "")
 
         # Check for image signing (Docker Content Trust / Notary)
-        if ".dkr.ecr." in image and ".amazonaws.com/" in image:
+        is_ecr_image = ".dkr.ecr." in image and image.count(".amazonaws.com") == 1 and "/" in image
+        if is_ecr_image:
             # ECR image - check for image signing
             recommendations.append(
                 {
