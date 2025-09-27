@@ -19,7 +19,7 @@ log_security_tool_response() {
     # Extract the actual tool JSON from the MCP wrapper using standard pattern
     local tool_json
     tool_json=$(extract_security_tool_result "$response" "$tool_name" 2>/dev/null)
-    
+
     if [ $? -ne 0 ]; then
         # Fallback to direct response if extraction fails
         tool_json="$response"
@@ -144,29 +144,29 @@ validate_security_success_status() {
 # Validate list_clusters response
 validate_security_list_clusters() {
     local response="$1"
-    
+
     # Extract tool result from MCP response using standard pattern
     local tool_result
     tool_result=$(extract_security_tool_result "$response" "list_clusters")
     local extract_exit_code=$?
-    
+
     if [ $extract_exit_code -ne 0 ]; then
         return 1
     fi
-    
+
     # Validate success status
     if ! validate_security_success_status "$tool_result" "list_clusters"; then
         return 1
     fi
-    
+
     # Check if response has required fields
     local clusters=$(echo "$tool_result" | jq -r '.clusters' 2>/dev/null)
-    
+
     if [ "$clusters" == "null" ]; then
         echo -e "${RED}❌ [list_clusters] Missing 'clusters' field in response${NC}"
         return 1
     fi
-    
+
     echo -e "${GREEN}✅ [list_clusters] All validations passed${NC}"
     return 0
 }
@@ -174,41 +174,41 @@ validate_security_list_clusters() {
 # Validate analyze_cluster_security response
 validate_security_analyze_cluster_security() {
     local response="$1"
-    
+
     # Extract tool result from MCP response using standard pattern
     local tool_result
     tool_result=$(extract_security_tool_result "$response" "analyze_cluster_security")
     local extract_exit_code=$?
-    
+
     if [ $extract_exit_code -ne 0 ]; then
         return 1
     fi
-    
+
     # Validate success status
     if ! validate_security_success_status "$tool_result" "analyze_cluster_security"; then
         return 1
     fi
-    
+
     # Check if response has required fields (based on actual response structure)
     local cluster_name=$(echo "$tool_result" | jq -r '.cluster_name' 2>/dev/null)
     local security_summary=$(echo "$tool_result" | jq -r '.security_summary' 2>/dev/null)
     local total_issues=$(echo "$tool_result" | jq -r '.total_issues_found' 2>/dev/null)
-    
+
     if [ "$cluster_name" == "null" ] || [ -z "$cluster_name" ]; then
         echo -e "${RED}❌ [analyze_cluster_security] Missing or empty 'cluster_name' field in response${NC}"
         return 1
     fi
-    
+
     if [ "$security_summary" == "null" ]; then
         echo -e "${RED}❌ [analyze_cluster_security] Missing 'security_summary' field in response${NC}"
         return 1
     fi
-    
+
     if [ "$total_issues" == "null" ]; then
         echo -e "${RED}❌ [analyze_cluster_security] Missing 'total_issues_found' field in response${NC}"
         return 1
     fi
-    
+
     # Enhanced validation: Check for new security categories in recommendations
     local recommendations=$(echo "$tool_result" | jq -r '.recommendations' 2>/dev/null)
     if [ "$recommendations" != "null" ]; then
@@ -216,7 +216,7 @@ validate_security_analyze_cluster_security() {
         local enhanced_categories=("envoy_security" "dns_security" "vpc_security" "storage_security")
         echo -e "${BLUE}ℹ️ [analyze_cluster_security] Enhanced security analysis categories available${NC}"
     fi
-    
+
     echo -e "${GREEN}✅ [analyze_cluster_security] All validations passed${NC}"
     return 0
 }
@@ -224,41 +224,41 @@ validate_security_analyze_cluster_security() {
 # Validate generate_security_report response
 validate_security_generate_security_report() {
     local response="$1"
-    
+
     # Extract tool result from MCP response using standard pattern
     local tool_result
     tool_result=$(extract_security_tool_result "$response" "generate_security_report")
     local extract_exit_code=$?
-    
+
     if [ $extract_exit_code -ne 0 ]; then
         return 1
     fi
-    
+
     # Validate success status
     if ! validate_security_success_status "$tool_result" "generate_security_report"; then
         return 1
     fi
-    
+
     # Check if response has required fields (based on actual response structure)
     local cluster_name=$(echo "$tool_result" | jq -r '.cluster_name' 2>/dev/null)
     local report_summary=$(echo "$tool_result" | jq -r '.report_summary' 2>/dev/null)
     local assessment=$(echo "$tool_result" | jq -r '.assessment' 2>/dev/null)
-    
+
     if [ "$cluster_name" == "null" ] || [ -z "$cluster_name" ]; then
         echo -e "${RED}❌ [generate_security_report] Missing or empty 'cluster_name' field in response${NC}"
         return 1
     fi
-    
+
     if [ "$report_summary" == "null" ]; then
         echo -e "${RED}❌ [generate_security_report] Missing 'report_summary' field in response${NC}"
         return 1
     fi
-    
+
     if [ "$assessment" == "null" ]; then
         echo -e "${RED}❌ [generate_security_report] Missing 'assessment' field in response${NC}"
         return 1
     fi
-    
+
     echo -e "${GREEN}✅ [generate_security_report] All validations passed${NC}"
     return 0
 }
@@ -266,29 +266,29 @@ validate_security_generate_security_report() {
 # Validate get_security_recommendations response
 validate_security_get_security_recommendations() {
     local response="$1"
-    
+
     # Extract tool result from MCP response using standard pattern
     local tool_result
     tool_result=$(extract_security_tool_result "$response" "get_security_recommendations")
     local extract_exit_code=$?
-    
+
     if [ $extract_exit_code -ne 0 ]; then
         return 1
     fi
-    
+
     # Validate success status
     if ! validate_security_success_status "$tool_result" "get_security_recommendations"; then
         return 1
     fi
-    
+
     # Check if response has required fields
     local recommendations=$(echo "$tool_result" | jq -r '.recommendations' 2>/dev/null)
-    
+
     if [ "$recommendations" == "null" ]; then
         echo -e "${RED}❌ [get_security_recommendations] Missing 'recommendations' field in response${NC}"
         return 1
     fi
-    
+
     echo -e "${GREEN}✅ [get_security_recommendations] All validations passed${NC}"
     return 0
 }
@@ -296,37 +296,37 @@ validate_security_get_security_recommendations() {
 # Validate check_compliance_status response
 validate_security_check_compliance_status() {
     local response="$1"
-    
+
     # Extract tool result from MCP response using standard pattern
     local tool_result
     tool_result=$(extract_security_tool_result "$response" "check_compliance_status")
     local extract_exit_code=$?
-    
+
     if [ $extract_exit_code -ne 0 ]; then
         return 1
     fi
-    
+
     # Validate success status
     if ! validate_security_success_status "$tool_result" "check_compliance_status"; then
         return 1
     fi
-    
+
     # For check_compliance_status, we need to check the actual response structure
     # Based on the log, it seems this action might return different fields
     # Let's be more flexible and check for key indicators of a compliance response
     local cluster_name=$(echo "$tool_result" | jq -r '.cluster_name' 2>/dev/null)
     local action=$(echo "$tool_result" | jq -r '.action' 2>/dev/null)
-    
+
     if [ "$cluster_name" == "null" ] || [ -z "$cluster_name" ]; then
         echo -e "${RED}❌ [check_compliance_status] Missing or empty 'cluster_name' field in response${NC}"
         return 1
     fi
-    
+
     if [ "$action" != "check_compliance_status" ]; then
         echo -e "${RED}❌ [check_compliance_status] Unexpected action field: $action${NC}"
         return 1
     fi
-    
+
     echo -e "${GREEN}✅ [check_compliance_status] All validations passed${NC}"
     return 0
 }
@@ -343,7 +343,7 @@ print_validation_summary() {
     echo -e "Total Tests:  ${BLUE}$total_tests${NC}"
     echo -e "Passed Tests: ${GREEN}$passed_tests${NC}"
     echo -e "Failed Tests: ${RED}$failed_tests${NC}"
-    
+
     if [ $failed_tests -eq 0 ]; then
         echo -e "Result:       ${GREEN}ALL TESTS PASSED${NC}"
     else

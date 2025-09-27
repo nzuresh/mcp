@@ -64,13 +64,13 @@ echo "Step 2: Deleting services..."
 if aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --region "$REGION" &>/dev/null; then
     echo "  Scaling down service: $SERVICE_NAME"
     aws ecs update-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --desired-count 0 --region "$REGION" > /dev/null 2>&1
-    
+
     echo "  Waiting for service to scale down..."
     sleep 15
-    
+
     echo "  Deleting service: $SERVICE_NAME"
     aws ecs delete-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --region "$REGION" > /dev/null 2>&1
-    
+
     echo "  Waiting for service deletion..."
     sleep 10
 else

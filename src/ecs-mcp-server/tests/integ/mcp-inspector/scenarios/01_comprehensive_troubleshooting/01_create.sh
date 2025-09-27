@@ -192,3 +192,4 @@ echo "   VPC_ID=$VPC_ID"
 echo "   SECURITY_GROUP_ID=$SG_ID"
 echo ""
 echo "Next: Run './02_test_all_tools.sh $CLUSTER_NAME $SERVICE_NAME' to test all troubleshooting tools"
+

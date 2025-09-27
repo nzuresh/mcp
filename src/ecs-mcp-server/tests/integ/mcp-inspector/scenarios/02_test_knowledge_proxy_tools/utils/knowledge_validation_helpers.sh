@@ -445,3 +445,4 @@ log_knowledge_tool_response() {
             ;;
     esac
 }
+

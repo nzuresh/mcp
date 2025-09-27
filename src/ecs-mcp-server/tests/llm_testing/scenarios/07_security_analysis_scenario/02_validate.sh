@@ -68,30 +68,30 @@ fi
 echo "🔍 Checking if test task definition exists..."
 if aws ecs describe-task-definition --task-definition "$TASK_DEFINITION_FAMILY" --region "$TEST_REGION" &>/dev/null; then
     echo "✅ Task definition '$TASK_DEFINITION_FAMILY' found"
-    
+
     # Get task definition details to verify security misconfigurations
     echo "🔍 Verifying intentional security misconfigurations..."
-    
+
     # Check for privileged container
     PRIVILEGED=$(aws ecs describe-task-definition --task-definition "$TASK_DEFINITION_FAMILY" --region "$TEST_REGION" \
         --query 'taskDefinition.containerDefinitions[0].privileged' --output text)
-    
+
     if [ "$PRIVILEGED" == "true" ]; then
         echo "✅ Found privileged container (intentional security issue)"
     else
         echo "⚠️  Privileged container not found - may affect test results"
     fi
-    
+
     # Check for hardcoded secrets in environment variables
     ENV_VARS=$(aws ecs describe-task-definition --task-definition "$TASK_DEFINITION_FAMILY" --region "$TEST_REGION" \
         --query 'taskDefinition.containerDefinitions[0].environment[?name==`SECRET_KEY`].value' --output text)
-    
+
     if [ -n "$ENV_VARS" ]; then
         echo "✅ Found hardcoded secrets in environment variables (intentional security issue)"
     else
         echo "⚠️  Hardcoded secrets not found - may affect test results"
     fi
-    
+
 else
     echo "❌ Task definition '$TASK_DEFINITION_FAMILY' not found. Run 01_create.sh first."
     exit 1

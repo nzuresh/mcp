@@ -187,3 +187,4 @@ fi
 echo -e "${BLUE}=======================================================${NC}"
 echo -e "${GREEN}MCP Inspector integration testing completed.${NC}"
 echo -e "${BLUE}=======================================================${NC}"
+

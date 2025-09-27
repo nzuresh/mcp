@@ -59,3 +59,4 @@ aws cloudformation create-stack \
 echo "Stack creation initiated. This will fail due to missing NetworkConfiguration in ECS Service."
 echo "Wait a few minutes for the failure to occur and then check the stack status:"
 echo "aws cloudformation describe-stacks --stack-name $STACK_NAME"
+

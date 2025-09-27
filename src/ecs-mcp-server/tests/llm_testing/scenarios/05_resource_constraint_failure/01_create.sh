@@ -100,3 +100,4 @@ echo ""
 echo "For reference, save these values for Cline prompts:"
 echo "CLUSTER_NAME=$CLUSTER_NAME"
 echo "TASK_FAMILY=$TASK_FAMILY"
+

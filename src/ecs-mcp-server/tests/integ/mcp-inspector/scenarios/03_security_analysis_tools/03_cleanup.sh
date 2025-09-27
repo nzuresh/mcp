@@ -14,7 +14,7 @@ CLUSTER_NAME="$1"
 if [ -z "$CLUSTER_NAME" ]; then
     CLUSTERS=$(aws ecs list-clusters --query 'clusterArns[*]' --output text 2>/dev/null)
     FOUND_CLUSTERS=""
-    
+
     for CLUSTER_ARN in $CLUSTERS; do
         TEMP_CLUSTER_NAME=$(echo "$CLUSTER_ARN" | awk -F/ '{print $2}')
         if [[ "$TEMP_CLUSTER_NAME" == *"mcp-security-test-cluster"* ]]; then
@@ -30,7 +30,7 @@ if [ -z "$CLUSTER_NAME" ]; then
     # Use the first found cluster
     CLUSTER_NAME=$(echo $FOUND_CLUSTERS | awk '{print $1}')
     echo "🔍 Auto-detected cluster: $CLUSTER_NAME"
-    
+
     # Show all found clusters if there are multiple
     CLUSTER_COUNT=$(echo $FOUND_CLUSTERS | wc -w)
     if [ $CLUSTER_COUNT -gt 1 ]; then
@@ -52,14 +52,14 @@ for SERVICE_ARN in $SERVICES; do
     if [[ "$SERVICE_NAME" == *"mcp-security-test-service"* ]]; then
         echo "  Stopping service: $SERVICE_NAME"
         aws ecs update-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --desired-count 0 >/dev/null 2>&1
-        
+
         # Wait for tasks to stop
         echo "  Waiting for tasks to stop..."
         aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" 2>/dev/null || true
-        
+
         echo "  Deleting service: $SERVICE_NAME"
         aws ecs delete-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" >/dev/null 2>&1
-        
+
         if [ $? -eq 0 ]; then
             echo "  ✅ Service $SERVICE_NAME deleted"
             echo "  ⏱️ Waiting 20 seconds for network interfaces to detach..."
@@ -77,7 +77,7 @@ TASK_FAMILIES=$(aws ecs list-task-definitions --family-prefix "mcp-security-test
 for TASK_DEF_ARN in $TASK_FAMILIES; do
     echo "  Deregistering task definition: $TASK_DEF_ARN"
     aws ecs deregister-task-definition --task-definition "$TASK_DEF_ARN" >/dev/null 2>&1
-    
+
     if [ $? -eq 0 ]; then
         echo "  ✅ Task definition deregistered"
     else
@@ -102,11 +102,11 @@ SECURITY_GROUPS=$(aws ec2 describe-security-groups --filters "Name=group-name,Va
 for SG_ID in $SECURITY_GROUPS; do
     if [ -n "$SG_ID" ] && [ "$SG_ID" != "None" ]; then
         echo "  Deleting security group: $SG_ID"
-        
+
         # Retry logic for security group deletion (network interfaces may still be detaching)
         MAX_RETRIES=6
         RETRY_COUNT=0
-        
+
         while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
             aws ec2 delete-security-group --group-id "$SG_ID" >/dev/null 2>&1
             if [ $? -eq 0 ]; then
@@ -121,7 +121,7 @@ for SG_ID in $SECURITY_GROUPS; do
                 RETRY_COUNT=$((RETRY_COUNT + 1))
             fi
         done
-        
+
         if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
             echo "  ⚠️ Failed to delete security group $SG_ID after $MAX_RETRIES attempts"
             echo "     Network interfaces may still be detaching. Try manual cleanup later:"
@@ -138,7 +138,7 @@ for LOG_GROUP in $LOG_GROUPS; do
     if [ -n "$LOG_GROUP" ] && [ "$LOG_GROUP" != "None" ]; then
         echo "  Deleting log group: $LOG_GROUP"
         aws logs delete-log-group --log-group-name "$LOG_GROUP" >/dev/null 2>&1
-        
+
         if [ $? -eq 0 ]; then
             echo "  ✅ Log group $LOG_GROUP deleted"
         else

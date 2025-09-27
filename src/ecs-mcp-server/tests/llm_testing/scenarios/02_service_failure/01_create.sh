@@ -64,3 +64,4 @@ aws ecs create-service \
 echo "Service creation initiated. This will fail due to the non-existent image."
 echo "Wait a few minutes for tasks to attempt to start and fail."
 echo "Then run the 02_validate.sh script to check the failure status."
+

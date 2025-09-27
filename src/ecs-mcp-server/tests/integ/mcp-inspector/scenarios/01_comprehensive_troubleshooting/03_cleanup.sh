@@ -171,3 +171,4 @@ echo "🎯 Cleanup completed!"
 echo "   All MCP integration test resources should be removed."
 echo "   If any resources remain, they can be cleaned up manually using the AWS CLI or console."
 echo ""
+

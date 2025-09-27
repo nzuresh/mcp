@@ -51,3 +51,4 @@ if [ -f "invalid_cfn_template.yaml" ]; then
 fi
 
 echo "Cleanup complete."
+

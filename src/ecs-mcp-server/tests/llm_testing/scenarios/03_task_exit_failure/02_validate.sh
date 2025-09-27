@@ -165,3 +165,4 @@ echo -e "\nFor reference, save these values for Cline prompts:"
 echo "CLUSTER_NAME: $CLUSTER_NAME"
 echo "TASK_ARN: $TASK_ARN"
 echo "LOG_GROUP: $LOG_GROUP"
+
