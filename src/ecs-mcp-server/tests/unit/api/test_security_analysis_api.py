@@ -1957,7 +1957,7 @@ class TestSecurityAnalysisAPI:
                     "linuxParameters": {
                         "tmpfs": [
                             {
-                                "containerPath": "/tmp",
+                                "containerPath": "/app/temp",  # nosec B108
                                 "size": 100,
                                 "mountOptions": ["rw"],  # Missing noexec
                             }
