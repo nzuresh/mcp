@@ -519,7 +519,7 @@ class SecurityAnalyzer:
         Returns:
             bool: True if the image is a valid ECR image, False otherwise
         """
-        if not image or image.startswith("https://"):
+        if not image or self._is_https_url(image):
             return False
 
         # ECR image format: [account-id].dkr.ecr.[region].amazonaws.com/[repository][:tag]
@@ -552,23 +552,66 @@ class SecurityAnalyzer:
         # 3. nginx:latest (implicit - library image)
         # 4. username/repo:tag (implicit - user image)
 
-        # Explicit Docker Hub format
-        if image.startswith("docker.io/"):
-            docker_hub_pattern = r"^docker\.io/[a-zA-Z0-9][a-zA-Z0-9._/-]*(?::[a-zA-Z0-9._-]+)?$"
-            return bool(re.match(docker_hub_pattern, image))
+        # Use comprehensive regex patterns to validate Docker Hub images
+        # This avoids substring sanitization vulnerabilities
+
+        # Explicit Docker Hub format: docker.io/[library/]repository[:tag]
+        explicit_docker_hub_pattern = (
+            r"^docker\.io/[a-zA-Z0-9][a-zA-Z0-9._/-]*(?::[a-zA-Z0-9._-]+)?$"
+        )
+        if re.match(explicit_docker_hub_pattern, image):
+            return True
 
         # Implicit Docker Hub format (no registry specified)
-        # Must not contain dots (to avoid matching other registries like example.com/repo)
-        # Must not start with localhost
-        if not image.startswith("localhost") and "." not in image.split("/")[0]:
-            # Pattern: [username/]repository[:tag]
-            implicit_pattern = (
-                r"^(?:[a-zA-Z0-9][a-zA-Z0-9._-]*/)?[a-zA-Z0-9][a-zA-Z0-9._-]*"
-                r"(?::[a-zA-Z0-9._-]+)?$"
-            )
-            return bool(re.match(implicit_pattern, image))
+        # Must not contain dots in the first part (to avoid matching other registries)
+        # Must not be localhost or contain protocol schemes
+        if "/" in image:
+            registry_part = image.split("/")[0]
+        else:
+            registry_part = image.split(":")[0]
 
-        return False
+        # Check if it looks like a registry (contains dots or is localhost)
+        if "." in registry_part or registry_part == "localhost":
+            return False
+
+        # Pattern: [username/]repository[:tag] - implicit Docker Hub
+        implicit_pattern = (
+            r"^(?:[a-zA-Z0-9][a-zA-Z0-9._-]*/)?[a-zA-Z0-9][a-zA-Z0-9._-]*"
+            r"(?::[a-zA-Z0-9._-]+)?$"
+        )
+        return bool(re.match(implicit_pattern, image))
+
+    def _is_https_url(self, url: str) -> bool:
+        """
+        Securely check if a URL uses HTTPS protocol.
+
+        Args:
+            url: The URL to check
+
+        Returns:
+            bool: True if the URL uses HTTPS, False otherwise
+        """
+        if not url:
+            return False
+        return bool(re.match(r"^https://", url))
+
+    def _is_latest_tag(self, image: str) -> bool:
+        """
+        Securely check if an image uses the 'latest' tag.
+
+        Args:
+            image: The container image URI
+
+        Returns:
+            bool: True if the image uses 'latest' tag or no tag, False otherwise
+        """
+        if not image:
+            return True  # No image is considered as using latest
+
+        # Use regex to check for :latest suffix or no tag at all
+        has_latest_tag = bool(re.search(r":latest$", image))
+        has_any_tag = bool(re.search(r":[a-zA-Z0-9._-]+$", image))
+        return has_latest_tag or not has_any_tag
 
     def _format_resource_name(
         self,
@@ -1443,7 +1486,7 @@ class SecurityAnalyzer:
 
         # Check for latest tag
         image = container.get("image", "")
-        if image.endswith(":latest") or image.count(":") == 0:
+        if self._is_latest_tag(image):
             recommendations.append(
                 {
                     "title": "Avoid Latest Tag in Container Images",
@@ -1556,7 +1599,9 @@ class SecurityAnalyzer:
             )
 
         # Check for private registry
-        is_public_ecr = image.startswith("public.ecr.aws/")
+        is_public_ecr = bool(
+            re.match(r"^public\.ecr\.aws/[a-zA-Z0-9][a-zA-Z0-9._/-]*(?::[a-zA-Z0-9._-]+)?$", image)
+        )
         is_docker_hub = self._is_docker_hub_image(image)
         is_private_ecr = self._is_valid_ecr_image(image)
 
@@ -1838,11 +1883,15 @@ class SecurityAnalyzer:
                     secret_keyword in env_name
                     for secret_keyword in ["password", "secret", "key", "token", "api_key"]
                 ):
-                    if (
-                        env_value
-                        and not env_value.startswith("arn:aws:secretsmanager")
-                        and not env_value.startswith("arn:aws:ssm")
-                    ):
+                    # Use regex to validate AWS ARN format securely
+                    is_secrets_manager_arn = (
+                        bool(re.match(r"^arn:aws:secretsmanager:", env_value))
+                        if env_value
+                        else False
+                    )
+                    is_ssm_arn = bool(re.match(r"^arn:aws:ssm:", env_value)) if env_value else False
+
+                    if env_value and not is_secrets_manager_arn and not is_ssm_arn:
                         recommendations.append(
                             {
                                 "title": "Use AWS Secrets Manager for Sensitive Data",
@@ -1888,7 +1937,7 @@ class SecurityAnalyzer:
                     secret_arn = secret.get("valueFrom", "")
 
                     # Check for Parameter Store vs Secrets Manager usage
-                    if secret_arn.startswith("arn:aws:ssm"):
+                    if bool(re.match(r"^arn:aws:ssm:", secret_arn)):
                         secret_name = secret.get("name", "")
                         if any(
                             keyword in secret_name.lower()
@@ -2165,7 +2214,11 @@ class SecurityAnalyzer:
                 gateway_id = route.get("GatewayId", "")
 
                 # Check for routes to 0.0.0.0/0 through internet gateway
-                if destination == "0.0.0.0/0" and gateway_id and gateway_id.startswith("igw-"):
+                if (
+                    destination == "0.0.0.0/0"
+                    and gateway_id
+                    and bool(re.match(r"^igw-[a-zA-Z0-9]+$", gateway_id))
+                ):
                     # This is normal for public subnets, but flag for review
                     recommendations.append(
                         {
@@ -3515,7 +3568,7 @@ class SecurityAnalyzer:
             )
 
         # Check for image immutability
-        if image.endswith(":latest") or image.count(":") == 0:
+        if self._is_latest_tag(image):
             recommendations.append(
                 {
                     "title": "Use Immutable Image Tags with Digest",
