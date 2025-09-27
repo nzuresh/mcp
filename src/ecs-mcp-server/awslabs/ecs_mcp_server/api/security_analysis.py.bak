@@ -958,9 +958,7 @@ class SecurityAnalyzer:
                                 "title": "Critical ECS Agent Security Update Required",
                                 "severity": "High",
                                 "category": "security",
-                                "resource": self._format_resource_name(
-                                    "Container Instance", instance_id
-                                ),
+                                "resource": self._format_resource_name("Container Instance", instance_id),
                                 "issue": f"ECS agent version {agent_version} has known security vulnerabilities",  # noqa: E501
                                 "recommendation": "Immediately update ECS agent to latest version to patch security vulnerabilities",  # noqa: E501
                             }
@@ -972,9 +970,7 @@ class SecurityAnalyzer:
                             "title": "Verify ECS Agent Version",
                             "severity": "Medium",
                             "category": "security",
-                            "resource": self._format_resource_name(
-                                "Container Instance", instance_id
-                            ),
+                            "resource": self._format_resource_name("Container Instance", instance_id),
                             "issue": f"Cannot parse ECS agent version: {agent_version}",
                             "recommendation": "Verify ECS agent version and ensure it is up to date for security",  # noqa: E501
                         }
@@ -1012,9 +1008,7 @@ class SecurityAnalyzer:
                             "title": "Legacy Instance Type Security Risk",
                             "severity": "Medium",
                             "category": "security",
-                            "resource": self._format_resource_name(
-                                "Container Instance", instance_id
-                            ),
+                            "resource": self._format_resource_name("Container Instance", instance_id),
                             "issue": f"Instance type {instance_type} is from older generation with potential hardware vulnerabilities",  # noqa: E501
                             "recommendation": "Migrate to newer generation instance types with enhanced security features",  # noqa: E501
                         }
@@ -1041,9 +1035,7 @@ class SecurityAnalyzer:
                                 "title": "Enable Managed Termination Protection",
                                 "severity": "Medium",
                                 "category": "security",
-                                "resource": self._format_resource_name(
-                                    "Capacity Provider", cp_name
-                                ),
+                                "resource": self._format_resource_name("Capacity Provider", cp_name),
                                 "issue": "Managed termination protection is disabled, allowing uncontrolled instance termination",  # noqa: E501
                                 "recommendation": "Enable managed termination protection to prevent unauthorized instance termination",  # noqa: E501
                             }
@@ -1994,7 +1986,7 @@ class SecurityAnalyzer:
                     "title": "Add Data Classification Tags",
                     "severity": "Medium",
                     "category": "compliance",
-                    "resource": self._format_resource_name("Service", service_name),
+                    "resource": f"Service: {service_name}",
                     "issue": "No data classification tags found",
                     "recommendation": "Add data classification tags to identify data sensitivity levels",  # noqa: E501
                 }
@@ -2031,7 +2023,7 @@ class SecurityAnalyzer:
                         "title": "Avoid Using Default VPC for Production Workloads",
                         "severity": "Medium",
                         "category": "network",
-                        "resource": self._format_resource_name("VPC", vpc_id),
+                        "resource": f"VPC: {vpc_id}",
                         "issue": "Using default VPC which may have less secure default configurations",  # noqa: E501
                         "recommendation": "Create a custom VPC with proper security configurations",
                     }
@@ -2122,7 +2114,7 @@ class SecurityAnalyzer:
                         "title": "Disable Auto-Assign Public IP for Subnets",
                         "severity": "Medium",
                         "category": "network_security",
-                        "resource": self._format_resource_name("Subnet", subnet_id),
+                        "resource": f"Subnet: {subnet_id}",
                         "issue": "Subnet automatically assigns public IP addresses",
                         "recommendation": "Disable auto-assign public IP and use NAT Gateway for outbound connectivity",  # noqa: E501
                     }
@@ -2146,7 +2138,7 @@ class SecurityAnalyzer:
                     "title": "Configure ECS Service-Linked Role",
                     "severity": "Medium",
                     "category": "iam_security",
-                    "resource": self._format_resource_name("Cluster", cluster_name),
+                    "resource": f"Cluster: {cluster_name}",
                     "issue": "No service-linked role configured for ECS cluster operations",
                     "recommendation": "Create and configure the AWSServiceRoleForECS service-linked role for proper cluster management",  # noqa: E501
                 }
@@ -2182,7 +2174,7 @@ class SecurityAnalyzer:
                     "title": "Enable VPC Flow Logs",
                     "severity": "Medium",
                     "category": "network_security",
-                    "resource": self._format_resource_name("VPC", vpc_id),
+                    "resource": f"VPC: {vpc_id}",
                     "issue": "VPC Flow Logs should be enabled for network traffic visibility and security monitoring",  # noqa: E501
                     "recommendation": "Enable VPC Flow Logs to monitor network traffic and detect security anomalies",  # noqa: E501
                 }
@@ -2233,7 +2225,7 @@ class SecurityAnalyzer:
                             "title": "Review Internet Gateway Routes",
                             "severity": "Low",
                             "category": "network_security",
-                            "resource": self._format_resource_name("Route Table", rt_id),
+                            "resource": f"Route Table: {rt_id}",
                             "issue": "Route table has default route (0.0.0.0/0) to Internet Gateway",  # noqa: E501
                             "recommendation": "Ensure this route table is only associated with public subnets that require internet access",  # noqa: E501
                         }
@@ -2275,7 +2267,7 @@ class SecurityAnalyzer:
                             "title": "Review Internet Gateway Security",
                             "severity": "Low",
                             "category": "network_security",
-                            "resource": self._format_resource_name("Internet Gateway", igw_id),
+                            "resource": f"Internet Gateway: {igw_id}",
                             "issue": f"Internet Gateway attached to VPC {vpc_id} - ensure proper security controls",  # noqa: E501
                             "recommendation": "Verify that only public subnets route through this IGW and private resources use NAT Gateway",  # noqa: E501
                         }
@@ -2314,7 +2306,7 @@ class SecurityAnalyzer:
                         "title": "Review Internet-Facing Load Balancer Security",
                         "severity": "Medium",
                         "category": "network_security",
-                        "resource": self._format_resource_name("Load Balancer", lb_name),
+                        "resource": f"Load Balancer: {lb_name}",
                         "issue": "Load balancer is internet-facing, ensure proper security controls are in place",  # noqa: E501
                         "recommendation": "Verify security groups, SSL/TLS configuration, and access controls for internet-facing load balancer",  # noqa: E501
                     }
@@ -2328,7 +2320,7 @@ class SecurityAnalyzer:
                         "title": "Configure Security Groups for Load Balancer",
                         "severity": "High",
                         "category": "network_security",
-                        "resource": self._format_resource_name("Load Balancer", lb_name),
+                        "resource": f"Load Balancer: {lb_name}",
                         "issue": "No security groups configured for load balancer",
                         "recommendation": "Configure appropriate security groups to control access to the load balancer",  # noqa: E501
                     }
@@ -2348,7 +2340,7 @@ class SecurityAnalyzer:
                         "title": "Enable Load Balancer Access Logs",
                         "severity": "Medium",
                         "category": "monitoring",
-                        "resource": self._format_resource_name("Load Balancer", lb_name),
+                        "resource": f"Load Balancer: {lb_name}",
                         "issue": "Access logs are not enabled - missing critical security monitoring and audit trail",  # noqa: E501
                         "recommendation": "Enable access logs to S3 bucket for security monitoring, compliance, and incident response",  # noqa: E501
                         "security_impact": "Without access logs, you cannot detect suspicious traffic patterns, DDoS attacks, or perform forensic analysis during security incidents",  # noqa: E501
@@ -2387,7 +2379,7 @@ class SecurityAnalyzer:
                         "title": "Implement Detective Controls (Well-Architected)",
                         "severity": "Medium",
                         "category": "well_architected",
-                        "resource": self._format_resource_name("Cluster", cluster_name),
+                        "resource": f"Cluster: {cluster_name}",
                         "issue": "Limited detective controls for security monitoring",
                         "recommendation": "Implement comprehensive logging, monitoring, and alerting following Well-Architected principles",  # noqa: E501
                     }
@@ -2488,9 +2480,7 @@ class SecurityAnalyzer:
                         "title": "PCI DSS: Encrypt Data in Transit",
                         "severity": "High",
                         "category": "pci_compliance",
-                        "resource": self._format_resource_name(
-                            "Load Balancer", lb_info.get("LoadBalancerName", "unknown")
-                        ),
+                        "resource": f"Load Balancer: {lb_info.get('LoadBalancerName', 'unknown')}",
                         "issue": "Unencrypted HTTP traffic detected",
                         "recommendation": "Configure HTTPS/TLS encryption for all data transmission",  # noqa: E501
                     }
@@ -2516,7 +2506,7 @@ class SecurityAnalyzer:
                     "title": "HIPAA: Encrypt Administrative Access",
                     "severity": "High",
                     "category": "hipaa_compliance",
-                    "resource": self._format_resource_name("Cluster", cluster_name),
+                    "resource": f"Cluster: {cluster_name}",
                     "issue": "Execute command sessions not encrypted with customer-managed keys",
                     "recommendation": "Configure KMS encryption for execute command to protect PHI access",  # noqa: E501
                 }
@@ -2534,7 +2524,7 @@ class SecurityAnalyzer:
                     "title": "HIPAA: Enable Comprehensive Audit Logging",
                     "severity": "High",
                     "category": "hipaa_compliance",
-                    "resource": self._format_resource_name("Cluster", cluster_name),
+                    "resource": f"Cluster: {cluster_name}",
                     "issue": "Container Insights disabled, limiting audit trail for PHI access",
                     "recommendation": "Enable Container Insights and comprehensive logging for HIPAA audit requirements",  # noqa: E501
                 }
@@ -2561,9 +2551,7 @@ class SecurityAnalyzer:
                         "title": "SOC 2: Implement Logical Access Controls",
                         "severity": "High",
                         "category": "soc2_compliance",
-                        "resource": self._format_resource_name(
-                            "Service", service.get("serviceName", "unknown")
-                        ),
+                        "resource": f"Service: {service.get('serviceName', 'unknown')}",
                         "issue": "Missing task IAM role for access control",
                         "recommendation": "Configure task IAM roles with least privilege access for SOC 2 compliance",  # noqa: E501
                     }
@@ -2581,7 +2569,7 @@ class SecurityAnalyzer:
                     "title": "SOC 2: Implement System Monitoring",
                     "severity": "Medium",
                     "category": "soc2_compliance",
-                    "resource": self._format_resource_name("Cluster", cluster_name),
+                    "resource": f"Cluster: {cluster_name}",
                     "issue": "Insufficient system monitoring for availability controls",
                     "recommendation": "Enable Container Insights and comprehensive monitoring for SOC 2 availability requirements",  # noqa: E501
                 }
@@ -2606,7 +2594,7 @@ class SecurityAnalyzer:
                         "title": "Configure Secure Service Discovery Namespace",
                         "severity": "Medium",
                         "category": "service_discovery",
-                        "resource": self._format_resource_name("Service", service_name),
+                        "resource": f"Service: {service_name}",
                         "issue": "Service Connect enabled without proper namespace configuration",
                         "recommendation": "Configure a dedicated namespace for secure service-to-service communication",  # noqa: E501
                     }
@@ -2945,9 +2933,7 @@ class SecurityAnalyzer:
                                         "title": "Enable ECR Vulnerability Scanning",
                                         "severity": "High",
                                         "category": "image_security",
-                                        "resource": self._format_resource_name(
-                                            "ECR Repository", repo_name
-                                        ),
+                                        "resource": f"ECR Repository: {repo_name}",
                                         "issue": "ECR repository does not have vulnerability scanning enabled, missing critical security vulnerability detection",  # noqa: E501
                                         "recommendation": "Enable scan on push to automatically scan container images for known vulnerabilities",  # noqa: E501
                                         "implementation_steps": [
@@ -3122,7 +3108,7 @@ class SecurityAnalyzer:
                         "title": "Configure Service Connect Namespace",
                         "severity": "Medium",
                         "category": "service_mesh",
-                        "resource": self._format_resource_name("Service", service_name),
+                        "resource": f"Service: {service_name}",
                         "issue": "Service Connect enabled without proper namespace configuration",
                         "recommendation": "Configure Service Connect namespace for proper service discovery and security boundaries",  # noqa: E501
                         "implementation_steps": [
@@ -3151,7 +3137,7 @@ class SecurityAnalyzer:
                                 "title": "Enable TLS for Service Connect Communication",
                                 "severity": "High",
                                 "category": "service_mesh",
-                                "resource": self._format_resource_name("Service", service_name),
+                                "resource": f"Service: {service_name}",
                                 "issue": f"Service Connect communication on port {port} may not be encrypted",  # noqa: E501
                                 "recommendation": "Configure TLS encryption for service-to-service communication",  # noqa: E501
                                 "implementation_steps": [
@@ -3175,7 +3161,7 @@ class SecurityAnalyzer:
                     "title": "Consider ECS Service Connect for Service Mesh",
                     "severity": "Low",
                     "category": "service_mesh",
-                    "resource": self._format_resource_name("Service", service_name),
+                    "resource": f"Service: {service_name}",
                     "issue": "Service lacks service mesh capabilities for secure service-to-service communication",  # noqa: E501
                     "recommendation": "Consider enabling ECS Service Connect for encrypted service-to-service communication and observability",  # noqa: E501
                     "implementation_steps": [
@@ -3210,7 +3196,7 @@ class SecurityAnalyzer:
                         "title": "Enable TLS in App Mesh Configuration",
                         "severity": "High",
                         "category": "service_mesh",
-                        "resource": self._format_resource_name("Service", service_name),
+                        "resource": f"Service: {service_name}",
                         "issue": "App Mesh proxy lacks TLS encryption configuration",
                         "recommendation": "Enable TLS encryption in App Mesh for secure service-to-service communication",  # noqa: E501
                         "implementation_steps": [
@@ -3231,7 +3217,7 @@ class SecurityAnalyzer:
                         "title": "Implement Mutual TLS (mTLS) for Service Mesh",
                         "severity": "High",
                         "category": "service_mesh",
-                        "resource": self._format_resource_name("Service", service_name),
+                        "resource": f"Service: {service_name}",
                         "issue": "App Mesh has TLS but lacks mutual TLS authentication for enhanced security",  # noqa: E501
                         "recommendation": "Implement mutual TLS (mTLS) to ensure both client and server authentication in service mesh",  # noqa: E501
                         "implementation_steps": [
@@ -3280,7 +3266,7 @@ class SecurityAnalyzer:
                         "title": "Configure Network Security Groups",
                         "severity": "High",
                         "category": "network_security",
-                        "resource": self._format_resource_name("Service", service_name),
+                        "resource": f"Service: {service_name}",
                         "issue": "Service lacks security group configuration for network access control",  # noqa: E501
                         "recommendation": "Configure security groups to implement network-level access controls and micro-segmentation",  # noqa: E501
                         "implementation_steps": [
@@ -3300,7 +3286,7 @@ class SecurityAnalyzer:
                         "title": "Review Network Security Group Rules",
                         "severity": "Medium",
                         "category": "network_security",
-                        "resource": self._format_resource_name("Service", service_name),
+                        "resource": f"Service: {service_name}",
                         "issue": "Security group rules should be reviewed for least privilege access",  # noqa: E501
                         "recommendation": "Regularly review and audit security group rules to ensure minimal required access",  # noqa: E501
                         "implementation_steps": [
@@ -3337,7 +3323,7 @@ class SecurityAnalyzer:
                             "title": "Secure DNS Service Discovery Configuration",
                             "severity": "Medium",
                             "category": "dns_security",
-                            "resource": self._format_resource_name("Service", service_name),
+                            "resource": f"Service: {service_name}",
                             "issue": "Service discovery DNS configuration should be secured against DNS attacks",  # noqa: E501
                             "recommendation": "Implement DNS security best practices for service discovery",  # noqa: E501
                             "implementation_steps": [
@@ -3357,7 +3343,7 @@ class SecurityAnalyzer:
                     "title": "Implement DNS Security Monitoring",
                     "severity": "Low",
                     "category": "dns_security",
-                    "resource": self._format_resource_name("Service", service_name),
+                    "resource": f"Service: {service_name}",
                     "issue": "Service lacks DNS security monitoring and protection",
                     "recommendation": "Implement DNS security monitoring to detect and prevent DNS-based attacks",  # noqa: E501
                     "implementation_steps": [
@@ -3395,7 +3381,7 @@ class SecurityAnalyzer:
                         "title": "Implement VPC Endpoints for AWS Services",
                         "severity": "Medium",
                         "category": "vpc_security",
-                        "resource": self._format_resource_name("Service", service_name),
+                        "resource": f"Service: {service_name}",
                         "issue": "Service may communicate with AWS services over the internet instead of private VPC endpoints",  # noqa: E501
                         "recommendation": "Configure VPC endpoints for AWS services to keep traffic within AWS network",  # noqa: E501
                         "implementation_steps": [
@@ -3630,7 +3616,7 @@ class SecurityAnalyzer:
                         "title": "Configure KMS Encryption for ECS Exec",
                         "severity": "High",
                         "category": "ecs_advanced",
-                        "resource": self._format_resource_name("Cluster", cluster_name),
+                        "resource": f"Cluster: {cluster_name}",
                         "issue": "ECS Exec is enabled without KMS encryption, potentially exposing sensitive command data",  # noqa: E501
                         "recommendation": "Configure customer-managed KMS key for ECS Exec session encryption",  # noqa: E501
                         "implementation_steps": [
@@ -3651,7 +3637,7 @@ class SecurityAnalyzer:
                         "title": "Enable ECS Exec Session Logging",
                         "severity": "Medium",
                         "category": "ecs_advanced",
-                        "resource": self._format_resource_name("Cluster", cluster_name),
+                        "resource": f"Cluster: {cluster_name}",
                         "issue": "ECS Exec sessions are not being logged, missing audit trail for security compliance",  # noqa: E501
                         "recommendation": "Enable CloudWatch or S3 logging for ECS Exec sessions",
                         "implementation_steps": [
@@ -3678,7 +3664,7 @@ class SecurityAnalyzer:
                         "title": "Enable Deployment Circuit Breaker for Blue/Green",
                         "severity": "Medium",
                         "category": "ecs_advanced",
-                        "resource": self._format_resource_name("Service", service_name),
+                        "resource": f"Service: {service_name}",
                         "issue": "Blue/Green deployment lacks circuit breaker protection against failed deployments",  # noqa: E501
                         "recommendation": "Enable deployment circuit breaker to automatically rollback failed Blue/Green deployments",  # noqa: E501
                         "implementation_steps": [
@@ -3701,7 +3687,7 @@ class SecurityAnalyzer:
                         "title": "Review Spot Instance Security Implications",
                         "severity": "Low",
                         "category": "ecs_advanced",
-                        "resource": self._format_resource_name("Service", service_name),
+                        "resource": f"Service: {service_name}",
                         "issue": "Service uses Spot instances which may have security implications for stateful workloads",  # noqa: E501
                         "recommendation": "Ensure Spot instance usage is appropriate for workload security requirements",  # noqa: E501
                         "implementation_steps": [
@@ -3726,7 +3712,7 @@ class SecurityAnalyzer:
                     "title": "Verify ECS Anywhere Security Configuration",
                     "severity": "Medium",
                     "category": "ecs_advanced",
-                    "resource": self._format_resource_name("Cluster", cluster_name),
+                    "resource": f"Cluster: {cluster_name}",
                     "issue": "Cluster has registered container instances that may include ECS Anywhere nodes requiring additional security",  # noqa: E501
                     "recommendation": "Ensure ECS Anywhere instances follow security best practices for hybrid deployments",  # noqa: E501
                     "implementation_steps": [
@@ -3762,7 +3748,7 @@ class SecurityAnalyzer:
                     "title": "Configure VPC Endpoints for AWS Services",
                     "severity": "Medium",
                     "category": "network_security",
-                    "resource": self._format_resource_name("VPC", vpc_id),
+                    "resource": f"VPC: {vpc_id}",
                     "issue": "VPC may lack endpoints for AWS services, potentially routing traffic through internet gateway",  # noqa: E501
                     "recommendation": "Configure VPC endpoints for ECS, ECR, S3, and CloudWatch to keep traffic within AWS network",  # noqa: E501
                     "implementation_steps": [
@@ -3785,7 +3771,7 @@ class SecurityAnalyzer:
                     "title": "Review DNS Security Configuration",
                     "severity": "Low",
                     "category": "network_security",
-                    "resource": self._format_resource_name("Service", service_name),
+                    "resource": f"Service: {service_name}",
                     "issue": "Service DNS configuration should be reviewed for security best practices",  # noqa: E501
                     "recommendation": "Ensure DNS queries are secured and consider using Route 53 Resolver DNS Firewall",  # noqa: E501
                     "implementation_steps": [
@@ -3807,7 +3793,7 @@ class SecurityAnalyzer:
                     "title": "Review Multiple Security Groups Configuration",
                     "severity": "Low",
                     "category": "network_security",
-                    "resource": self._format_resource_name("Service", service_name),
+                    "resource": f"Service: {service_name}",
                     "issue": f"Service uses {len(security_groups)} security groups which may create complex rule interactions",  # noqa: E501
                     "recommendation": "Review security group rules for conflicts and implement principle of least privilege",  # noqa: E501
                     "implementation_steps": [
@@ -3849,7 +3835,7 @@ class SecurityAnalyzer:
                             "title": "Verify EFS Encryption at Rest",
                             "severity": "High",
                             "category": "storage_security",
-                            "resource": self._format_resource_name("EFS Volume", volume_name),
+                            "resource": f"EFS Volume: {volume_name}",
                             "issue": "EFS file system encryption at rest status should be verified",
                             "recommendation": "Ensure EFS file system has encryption at rest enabled with customer-managed KMS key",  # noqa: E501
                             "implementation_steps": [
@@ -3871,7 +3857,7 @@ class SecurityAnalyzer:
                             "title": "Enable EFS Encryption in Transit",
                             "severity": "High",
                             "category": "storage_security",
-                            "resource": self._format_resource_name("EFS Volume", volume_name),
+                            "resource": f"EFS Volume: {volume_name}",
                             "issue": "EFS volume lacks encryption in transit, exposing data during network transmission",  # noqa: E501
                             "recommendation": "Enable EFS encryption in transit to protect data during network transmission",  # noqa: E501
                             "implementation_steps": [
@@ -3891,7 +3877,7 @@ class SecurityAnalyzer:
                         "title": "Configure EFS Backup and Lifecycle Policies",
                         "severity": "Medium",
                         "category": "storage_security",
-                        "resource": self._format_resource_name("EFS Volume", volume_name),
+                        "resource": f"EFS Volume: {volume_name}",
                         "issue": "EFS file system should have backup and lifecycle policies for data protection",  # noqa: E501
                         "recommendation": "Configure automatic backups and lifecycle management for EFS file system",  # noqa: E501
                         "implementation_steps": [
@@ -3913,9 +3899,7 @@ class SecurityAnalyzer:
                             "title": "Review EFS Access Point Security Configuration",
                             "severity": "Medium",
                             "category": "storage_security",
-                            "resource": self._format_resource_name(
-                                "EFS Access Point", access_point_id
-                            ),
+                            "resource": f"EFS Access Point: {access_point_id}",
                             "issue": "EFS access point configuration should be reviewed for proper access controls",  # noqa: E501
                             "recommendation": "Ensure EFS access point has proper POSIX permissions and path restrictions",  # noqa: E501
                             "implementation_steps": [
@@ -3938,7 +3922,7 @@ class SecurityAnalyzer:
                         "title": "Verify FSx Security Configuration",
                         "severity": "High",
                         "category": "storage_security",
-                        "resource": self._format_resource_name("FSx Volume", volume_name),
+                        "resource": f"FSx Volume: {volume_name}",
                         "issue": "FSx file system security configuration should be verified for encryption and access controls",  # noqa: E501
                         "recommendation": "Ensure FSx file system has proper encryption, backup, and access control configuration",  # noqa: E501
                         "implementation_steps": [
@@ -3958,7 +3942,7 @@ class SecurityAnalyzer:
                         "title": "Configure FSx Backup and Versioning",
                         "severity": "Medium",
                         "category": "storage_security",
-                        "resource": self._format_resource_name("FSx Volume", volume_name),
+                        "resource": f"FSx Volume: {volume_name}",
                         "issue": "FSx file system should have comprehensive backup and versioning strategy",  # noqa: E501
                         "recommendation": "Implement FSx backup policies and file versioning for data protection",  # noqa: E501
                         "implementation_steps": [
@@ -4100,7 +4084,7 @@ class SecurityAnalyzer:
                     "title": "Review Envoy Proxy Configuration Security",
                     "severity": "High",
                     "category": "envoy_security",
-                    "resource": self._format_resource_name("Service", service_name),
+                    "resource": f"Service: {service_name}",
                     "issue": "Envoy proxy configuration should be reviewed for security best practices",  # noqa: E501
                     "recommendation": "Implement comprehensive Envoy proxy security configuration",
                     "implementation_steps": [
@@ -4121,7 +4105,7 @@ class SecurityAnalyzer:
                         "title": "Configure Envoy Access Logging",
                         "severity": "Medium",
                         "category": "envoy_security",
-                        "resource": self._format_resource_name("Service", service_name),
+                        "resource": f"Service: {service_name}",
                         "issue": "Envoy proxy lacks proper logging configuration for security monitoring",  # noqa: E501
                         "recommendation": "Configure Envoy access logging for security audit and monitoring",  # noqa: E501
                         "implementation_steps": [
@@ -4142,7 +4126,7 @@ class SecurityAnalyzer:
                         "title": "Secure Envoy Admin Interface",
                         "severity": "High",
                         "category": "envoy_security",
-                        "resource": self._format_resource_name("Service", service_name),
+                        "resource": f"Service: {service_name}",
                         "issue": "Envoy admin interface is enabled, potentially exposing sensitive proxy configuration",  # noqa: E501  # noqa: E501
                         "recommendation": "Disable Envoy admin interface in production or secure it with proper authentication",  # noqa: E501  # noqa: E501
                         "implementation_steps": [
@@ -4163,7 +4147,7 @@ class SecurityAnalyzer:
                         "title": "Configure Envoy Mutual TLS (mTLS)",
                         "severity": "High",
                         "category": "envoy_security",
-                        "resource": self._format_resource_name("Service", service_name),
+                        "resource": f"Service: {service_name}",
                         "issue": "Envoy proxy lacks mutual TLS configuration for secure service-to-service communication",  # noqa: E501
                         "recommendation": "Enable mutual TLS in Envoy proxy for enhanced authentication and encryption",  # noqa: E501
                         "implementation_steps": [
@@ -4184,7 +4168,7 @@ class SecurityAnalyzer:
                         "title": "Configure Envoy Circuit Breaker",
                         "severity": "Medium",
                         "category": "envoy_security",
-                        "resource": self._format_resource_name("Service", service_name),
+                        "resource": f"Service: {service_name}",
                         "issue": "Envoy proxy lacks circuit breaker configuration for resilience against cascading failures",  # noqa: E501
                         "recommendation": "Configure circuit breaker settings to protect against service overload",  # noqa: E501
                         "implementation_steps": [
@@ -4205,7 +4189,7 @@ class SecurityAnalyzer:
                         "title": "Configure Envoy Rate Limiting",
                         "severity": "Medium",
                         "category": "envoy_security",
-                        "resource": self._format_resource_name("Service", service_name),
+                        "resource": f"Service: {service_name}",
                         "issue": "Envoy proxy lacks rate limiting configuration for DDoS protection",  # noqa: E501
                         "recommendation": "Implement rate limiting in Envoy proxy to protect against abuse and DDoS attacks",  # noqa: E501
                         "implementation_steps": [
@@ -4225,7 +4209,7 @@ class SecurityAnalyzer:
                     "title": "Configure Envoy Security Headers",
                     "severity": "Medium",
                     "category": "envoy_security",
-                    "resource": self._format_resource_name("Service", service_name),
+                    "resource": f"Service: {service_name}",
                     "issue": "Envoy proxy should be configured to add security headers to responses",  # noqa: E501
                     "recommendation": "Configure Envoy to add security headers for enhanced web application security",  # noqa: E501
                     "implementation_steps": [
