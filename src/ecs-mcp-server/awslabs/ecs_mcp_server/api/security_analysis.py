@@ -531,6 +531,45 @@ class SecurityAnalyzer:
 
         return bool(re.match(ecr_pattern, image))
 
+    def _is_docker_hub_image(self, image: str) -> bool:
+        """
+        Securely validate if an image URI is from Docker Hub.
+
+        Uses proper regex pattern matching to prevent URL substring sanitization vulnerabilities.
+
+        Args:
+            image: The container image URI to validate
+
+        Returns:
+            bool: True if the image is from Docker Hub, False otherwise
+        """
+        if not image:
+            return False
+
+        # Docker Hub image formats:
+        # 1. docker.io/library/nginx:latest (explicit)
+        # 2. docker.io/username/repo:tag (explicit)
+        # 3. nginx:latest (implicit - library image)
+        # 4. username/repo:tag (implicit - user image)
+
+        # Explicit Docker Hub format
+        if image.startswith("docker.io/"):
+            docker_hub_pattern = r"^docker\.io/[a-zA-Z0-9][a-zA-Z0-9._/-]*(?::[a-zA-Z0-9._-]+)?$"
+            return bool(re.match(docker_hub_pattern, image))
+
+        # Implicit Docker Hub format (no registry specified)
+        # Must not contain dots (to avoid matching other registries like example.com/repo)
+        # Must not start with localhost
+        if not image.startswith("localhost") and "." not in image.split("/")[0]:
+            # Pattern: [username/]repository[:tag]
+            implicit_pattern = (
+                r"^(?:[a-zA-Z0-9][a-zA-Z0-9._-]*/)?[a-zA-Z0-9][a-zA-Z0-9._-]*"
+                r"(?::[a-zA-Z0-9._-]+)?$"
+            )
+            return bool(re.match(implicit_pattern, image))
+
+        return False
+
     def _format_resource_name(
         self,
         resource_type: str,
@@ -1518,9 +1557,7 @@ class SecurityAnalyzer:
 
         # Check for private registry
         is_public_ecr = image.startswith("public.ecr.aws/")
-        is_docker_hub = image.startswith("docker.io/") or (
-            image.count(":") == 1 and image.count("/") == 0 and not image.startswith("localhost")
-        )
+        is_docker_hub = self._is_docker_hub_image(image)
         is_private_ecr = self._is_valid_ecr_image(image)
 
         if is_public_ecr or is_docker_hub or not is_private_ecr:
