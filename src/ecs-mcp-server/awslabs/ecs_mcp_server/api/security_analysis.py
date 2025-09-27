@@ -61,7 +61,7 @@ def _format_resource_name(
     # Sanitize inputs to prevent injection attacks
     safe_resource_type = str(resource_type).replace("|", "-").replace(":", "-")
     safe_resource_name = str(resource_name).replace("|", "-").replace(":", "-")
-    
+
     base_resource = f"{safe_resource_type}: {safe_resource_name}"
 
     # Add service context if provided and not already a service resource
@@ -1494,9 +1494,11 @@ class SecurityAnalyzer:
 
         # Check for private registry
         if (
-            "public.ecr.aws" in image
-            or "docker.io" in image
-            or not any(registry in image for registry in [".ecr.", ".amazonaws.com"])
+            image.startswith("public.ecr.aws/")
+            or "public.ecr.aws/" in image
+            or image.startswith("docker.io/")
+            or "docker.io/" in image
+            or not any(registry in image for registry in [".dkr.ecr.", ".amazonaws.com/"])
         ):
             recommendations.append(
                 {
@@ -2558,7 +2560,7 @@ class SecurityAnalyzer:
             return recommendations
 
         # Check for image scanning and security
-        if ".ecr." in image and ".amazonaws.com" in image:
+        if ".dkr.ecr." in image and ".amazonaws.com/" in image:
             # This is an ECR image - recommend image scanning
             recommendations.append(
                 {
@@ -2785,7 +2787,7 @@ class SecurityAnalyzer:
         image = container.get("image", "")
 
         # Check if image is from ECR
-        if ".dkr.ecr." in image and ".amazonaws.com" in image:
+        if ".dkr.ecr." in image and ".amazonaws.com/" in image:
             try:
                 # Extract repository name from ECR image URI
                 # Format: account.dkr.ecr.region.amazonaws.com/repository:tag
@@ -3293,7 +3295,7 @@ class SecurityAnalyzer:
         image = container.get("image", "")
 
         # Check for image signing (Docker Content Trust / Notary)
-        if ".dkr.ecr." in image and ".amazonaws.com" in image:
+        if ".dkr.ecr." in image and ".amazonaws.com/" in image:
             # ECR image - check for image signing
             recommendations.append(
                 {
