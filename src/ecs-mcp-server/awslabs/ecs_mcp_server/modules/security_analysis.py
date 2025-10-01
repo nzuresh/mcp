@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +25,6 @@ from typing import Any, Dict, List, Optional
 from fastmcp import FastMCP
 
 from awslabs.ecs_mcp_server.api.security_analysis import ECSSecurityAnalyzer
-from awslabs.ecs_mcp_server.utils.aws_utils import get_aws_session
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +48,8 @@ def analyze_cluster_security(
     try:
         logger.info(f"Starting cluster security analysis for: {cluster_name}")
 
-        session = get_aws_session(region=region, profile=profile)
-        analyzer = ECSSecurityAnalyzer(session)
+        # Create analyzer with region (profile support can be added later)
+        analyzer = ECSSecurityAnalyzer(region_name=region or "us-east-1")
 
         result = analyzer.analyze_cluster_security(cluster_name)
 
@@ -91,8 +89,8 @@ def analyze_service_security(
             f"Starting service security analysis for: {service_name} in cluster: {cluster_name}"
         )
 
-        session = get_aws_session(region=region, profile=profile)
-        analyzer = ECSSecurityAnalyzer(session)
+        # Create analyzer with region (profile support can be added later)
+        analyzer = ECSSecurityAnalyzer(region_name=region or "us-east-1")
 
         result = analyzer.analyze_service_security(cluster_name, service_name)
 
@@ -129,8 +127,8 @@ def analyze_task_definition_security(
     try:
         logger.info(f"Starting task definition security analysis for: {task_definition_arn}")
 
-        session = get_aws_session(region=region, profile=profile)
-        analyzer = ECSSecurityAnalyzer(session)
+        # Create analyzer with region (profile support can be added later)
+        analyzer = ECSSecurityAnalyzer(region_name=region or "us-east-1")
 
         result = analyzer.analyze_task_definition_security(task_definition_arn)
 
@@ -173,8 +171,8 @@ def analyze_comprehensive_security(
     try:
         logger.info(f"Starting comprehensive security analysis for cluster: {cluster_name}")
 
-        session = get_aws_session(region=region, profile=profile)
-        analyzer = ECSSecurityAnalyzer(session)
+        # Create analyzer with region (profile support can be added later)
+        analyzer = ECSSecurityAnalyzer(region_name=region or "us-east-1")
 
         result = analyzer.analyze_comprehensive_security(cluster_name)
 
@@ -220,8 +218,8 @@ def generate_security_report(
     try:
         logger.info(f"Generating security report for cluster: {cluster_name}")
 
-        session = get_aws_session(region=region, profile=profile)
-        analyzer = ECSSecurityAnalyzer(session)
+        # Create analyzer with region (profile support can be added later)
+        analyzer = ECSSecurityAnalyzer(region_name=region or "us-east-1")
 
         result = analyzer.generate_security_report(
             cluster_name=cluster_name,
@@ -263,8 +261,8 @@ def get_security_metrics(
     try:
         logger.info(f"Getting security metrics for cluster: {cluster_name}")
 
-        session = get_aws_session(region=region, profile=profile)
-        analyzer = ECSSecurityAnalyzer(session)
+        # Create analyzer with region (profile support can be added later)
+        analyzer = ECSSecurityAnalyzer(region_name=region or "us-east-1")
 
         result = analyzer.get_security_metrics(cluster_name)
 
