@@ -31,6 +31,7 @@ from awslabs.ecs_mcp_server.modules import (
     deployment_status,
     infrastructure,
     resource_management,
+    security_analysis,
     troubleshooting,
 )
 from awslabs.ecs_mcp_server.utils.config import get_config
@@ -90,7 +91,7 @@ def _create_ecs_mcp_server() -> Tuple[FastMCP, Dict[str, Any]]:
     mcp = FastMCP(
         name="AWS ECS MCP Server",
         lifespan=server_lifespan,
-        instructions="""Use this server to containerize and deploy web applications to AWS ECS.
+        instructions="""Use this server to containerize, deploy, and secure applications on AWS ECS.
 
 WORKFLOW:
 1. containerize_app:
@@ -108,6 +109,22 @@ WORKFLOW:
    - Get the ALB URL to access your application
    - Monitor the health of your ECS Service
 
+4. Security Analysis (NEW):
+   - analyze_ecs_cluster_security: Analyze cluster security configuration
+   - analyze_ecs_service_security: Analyze service security settings
+   - analyze_ecs_task_definition_security: Analyze task definition security
+   - analyze_ecs_comprehensive_security: Complete security analysis across all components
+   - generate_ecs_security_report: Generate filtered security reports
+   - get_ecs_security_metrics: Get security metrics and KPIs
+
+SECURITY FEATURES:
+- Comprehensive security analysis across all ECS components
+- Support for compliance frameworks (SOC2, HIPAA, PCI-DSS)
+- Detailed security findings with severity levels (High, Medium, Low)
+- Actionable recommendations for security improvements
+- Security metrics and scoring for monitoring
+- Customizable reports with filtering options
+
 IMPORTANT:
 - Make sure your application has a clear entry point
 - Ensure all dependencies are properly defined in requirements.txt, package.json, etc.
@@ -115,6 +132,7 @@ IMPORTANT:
 - AWS credentials must be properly configured with appropriate permissions
 - Set ALLOW_WRITE=true to enable infrastructure creation and deletion
 - Set ALLOW_SENSITIVE_DATA=true to enable access to logs and detailed resource information
+- Use security analysis tools to ensure your ECS deployment follows best practices
 """,
     )
 
@@ -132,6 +150,7 @@ IMPORTANT:
     infrastructure.register_module(mcp)
     deployment_status.register_module(mcp)
     resource_management.register_module(mcp)
+    security_analysis.register_module(mcp)
     troubleshooting.register_module(mcp)
     delete.register_module(mcp)
 
