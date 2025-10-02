@@ -422,11 +422,11 @@ class TestDataAdapter:
                 {
                     "clusterName": "test-cluster",
                     "clusterArn": "arn:aws:ecs:us-east-1:123456789012:cluster/test-cluster",
-                    "status": "ACTIVE"
+                    "status": "ACTIVE",
                 }
             ]
         }
-        
+
         mock_capacity_providers_error = {"error": "Access denied", "status": "failed"}
 
         # Configure mock to return different responses based on operation
@@ -467,6 +467,7 @@ class TestDataAdapter:
     @patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
     async def test_collect_service_data_describe_services_error(self, mock_ecs_api):
         """Test service data collection when DescribeServices returns error."""
+
         # Mock successful list but failed describe
         def mock_ecs_operation(operation, params):
             if operation == "ListServices":
@@ -499,11 +500,9 @@ class TestDataAdapter:
         """Test service data collection with task definition fallback."""
         # Mock service responses
         mock_list_services_response = {
-            "serviceArns": [
-                "arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service"
-            ]
+            "serviceArns": ["arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service"]
         }
-        
+
         mock_describe_services_response = {
             "services": [
                 {
@@ -514,25 +513,20 @@ class TestDataAdapter:
                     "status": "ACTIVE",
                     "taskDefinition": (
                         "arn:aws:ecs:us-east-1:123456789012:task-definition/test-task:1"
-                    )
+                    ),
                 }
             ]
         }
-        
+
         # Mock empty task definitions from find_task_definitions (to trigger fallback)
         mock_find_task_defs.return_value = []
-        
+
         # Mock task definition response for fallback
         mock_task_def_response = {
             "taskDefinition": {
                 "family": "test-task",
                 "revision": 1,
-                "containerDefinitions": [
-                    {
-                        "name": "test-container",
-                        "image": "nginx:latest"
-                    }
-                ]
+                "containerDefinitions": [{"name": "test-container", "image": "nginx:latest"}],
             }
         }
 
@@ -559,7 +553,7 @@ class TestDataAdapter:
         # Verify the result
         assert result["status"] == "success"
         assert len(result["services"]) == 1
-        
+
         service_data = result["services"][0]
         assert service_data["service"]["serviceName"] == "test-service"
         assert service_data["task_definition"]["family"] == "test-task"
@@ -568,7 +562,7 @@ class TestDataAdapter:
     async def test_adapt_to_security_format_exception(self):
         """Test data adaptation when an exception occurs."""
         # Mock the collect_cluster_data to raise an exception
-        with patch.object(self.data_adapter, 'collect_cluster_data') as mock_cluster:
+        with patch.object(self.data_adapter, "collect_cluster_data") as mock_cluster:
             mock_cluster.side_effect = Exception("Unexpected error")
 
             # Call the method
@@ -578,6 +572,79 @@ class TestDataAdapter:
             assert "us-east-1" in result
             assert "error" in result["us-east-1"]
             assert "Unexpected error" in result["us-east-1"]["error"]
+
+    @pytest.mark.anyio
+    @patch("awslabs.ecs_mcp_server.api.security_analysis.find_task_definitions")
+    @patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
+    async def test_collect_service_data_service_exception(self, mock_ecs_api, mock_find_task_defs):
+        """Test service data collection when an exception occurs during service processing."""
+        # Mock service list response
+        mock_list_services_response = {
+            "serviceArns": ["arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service"]
+        }
+
+        # Mock find_task_definitions to raise an exception
+        mock_find_task_defs.side_effect = Exception("Task definition error")
+
+        # Configure mock to return different responses based on operation
+        def mock_ecs_operation(operation, params):
+            if operation == "ListServices":
+                return mock_list_services_response
+            elif operation == "DescribeServices":
+                return {
+                    "services": [
+                        {
+                            "serviceName": "test-service",
+                            "serviceArn": (
+                                "arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service"
+                            ),
+                            "status": "ACTIVE",
+                        }
+                    ]
+                }
+            else:
+                return {"tags": []}
+
+        mock_ecs_api.side_effect = mock_ecs_operation
+
+        # Call the method
+        result = await self.data_adapter.collect_service_data("test-cluster")
+
+        # Verify the result - should succeed but skip the problematic service
+        assert result["status"] == "success"
+        assert result["cluster_name"] == "test-cluster"
+        assert result["services"] == []  # Should be empty due to exception
+
+    @pytest.mark.anyio
+    async def test_adapt_to_security_format_service_error(self):
+        """Test data adaptation when service data collection returns error."""
+        # Mock the individual collection methods
+        with (
+            patch.object(self.data_adapter, "collect_cluster_data") as mock_cluster,
+            patch.object(self.data_adapter, "collect_service_data") as mock_service,
+            patch.object(self.data_adapter, "collect_network_data") as mock_network,
+        ):
+            # Mock responses with service error
+            mock_cluster.return_value = {
+                "cluster": {"clusterName": "test-cluster"},
+                "capacity_providers": [],
+                "tags": [],
+                "status": "success",
+            }
+
+            mock_service.return_value = {"error": "Service access denied", "services": []}
+
+            mock_network.return_value = {"network_data": {"vpcs": {}}, "status": "success"}
+
+            # Call the method
+            result = await self.data_adapter.adapt_to_security_format("test-cluster", "us-east-1")
+
+            # Verify the result structure and errors
+            assert "us-east-1" in result
+            cluster_data = result["us-east-1"]["clusters"]["test-cluster"]
+            assert "errors" in cluster_data
+            assert len(cluster_data["errors"]) == 1
+            assert "Service data: Service access denied" in cluster_data["errors"]
 
 
 class TestSecurityAnalyzer:
@@ -999,3 +1066,36 @@ class TestAnalyzeEcsSecurity:
             # Verify analyzer was still called with empty data
             mock_analyzer.analyze.assert_called_once()
 
+    @pytest.mark.anyio
+    @patch("awslabs.ecs_mcp_server.api.security_analysis.find_clusters")
+    async def test_analyze_ecs_security_region_exception(self, mock_find_clusters):
+        """Test ECS security analysis when region-level exception occurs."""
+        # Mock cluster discovery to raise exception
+        mock_find_clusters.side_effect = Exception("Region access error")
+
+        # Mock SecurityAnalyzer
+        with patch(
+            "awslabs.ecs_mcp_server.api.security_analysis.SecurityAnalyzer"
+        ) as mock_analyzer_class:
+            # Mock analyzer instance
+            mock_analyzer = MagicMock()
+            mock_analyzer.analyze.return_value = {
+                "recommendations": [],
+                "total_issues": 0,
+                "analysis_summary": {"total_recommendations": 0},
+            }
+            mock_analyzer_class.return_value = mock_analyzer
+
+            # Call the function
+            result = await analyze_ecs_security()
+
+            # Verify the result still succeeds but with region error data
+            assert result["status"] == "success"
+            assert result["total_issues"] == 0
+
+            # Verify analyzer was called with error data
+            mock_analyzer.analyze.assert_called_once()
+            call_args = mock_analyzer.analyze.call_args[0][0]
+            assert "us-east-1" in call_args
+            assert "error" in call_args["us-east-1"]
+            assert "Region access error" in call_args["us-east-1"]["error"]
