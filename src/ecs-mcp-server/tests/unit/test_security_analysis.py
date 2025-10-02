@@ -764,8 +764,17 @@ class TestSecurityAnalyzer:
         cluster_data = {
             "cluster": {
                 "clusterName": "test-cluster",
+                "status": "ACTIVE",
                 "settings": [{"name": "containerInsights", "value": "enabled"}],
-                "configuration": {"executeCommandConfiguration": {"logging": "OVERRIDE"}},
+                "configuration": {
+                    "executeCommandConfiguration": {
+                        "logging": "OVERRIDE",
+                        "kmsKeyId": (
+                            "arn:aws:kms:us-east-1:123456789012:key/"
+                            "12345678-1234-1234-1234-123456789012"
+                        ),
+                    }
+                },
             }
         }
 
