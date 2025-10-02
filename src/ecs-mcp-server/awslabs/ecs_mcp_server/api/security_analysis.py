@@ -235,3 +235,31 @@ async def analyze_ecs_security(
             "analysis_summary": {},
             "status": "failed",
         }
+
+
+def register_module(mcp) -> None:
+    """
+    Register the security analysis module with MCP.
+
+    Args:
+        mcp: The MCP server instance
+    """
+
+    @mcp.tool(name="analyze_ecs_security")
+    async def analyze_ecs_security_tool(
+        cluster_names: Optional[List[str]] = None,
+        regions: Optional[List[str]] = None,
+        analysis_scope: Optional[str] = "basic",
+    ) -> Dict[str, Any]:
+        """
+        Perform minimal security analysis of ECS clusters.
+
+        Args:
+            cluster_names: List of cluster names to analyze
+            regions: Optional list of regions (not used in minimal implementation)
+            analysis_scope: Scope of analysis (not used in minimal implementation)
+
+        Returns:
+            Dictionary containing security analysis results
+        """
+        return await analyze_ecs_security(cluster_names, regions, analysis_scope)

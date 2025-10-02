@@ -24,8 +24,8 @@ from awslabs.ecs_mcp_server.api.security_analysis import (
     DataAdapter,
     SecurityAnalyzer,
     analyze_ecs_security,
+    register_module,
 )
-from awslabs.ecs_mcp_server.modules.security_analysis import register_module
 
 
 class TestDataAdapter:
@@ -227,7 +227,5 @@ class TestIntegration:
     def test_module_imports(self) -> None:
         """Test that all modules import correctly."""
         from awslabs.ecs_mcp_server.api import security_analysis
-        from awslabs.ecs_mcp_server.modules import security_analysis as security_module
 
         assert security_analysis is not None
-        assert security_module is not None
