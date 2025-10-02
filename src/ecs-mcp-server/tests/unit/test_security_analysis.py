@@ -493,7 +493,9 @@ class TestDataAdapter:
     @pytest.mark.anyio
     @patch("awslabs.ecs_mcp_server.api.security_analysis.find_task_definitions")
     @patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
-    async def test_collect_service_data_with_task_definition_fallback(self, mock_ecs_api, mock_find_task_defs):
+    async def test_collect_service_data_with_task_definition_fallback(
+        self, mock_ecs_api, mock_find_task_defs
+    ):
         """Test service data collection with task definition fallback."""
         # Mock service responses
         mock_list_services_response = {
@@ -506,9 +508,13 @@ class TestDataAdapter:
             "services": [
                 {
                     "serviceName": "test-service",
-                    "serviceArn": "arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service",
+                    "serviceArn": (
+                        "arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service"
+                    ),
                     "status": "ACTIVE",
-                    "taskDefinition": "arn:aws:ecs:us-east-1:123456789012:task-definition/test-task:1"
+                    "taskDefinition": (
+                        "arn:aws:ecs:us-east-1:123456789012:task-definition/test-task:1"
+                    )
                 }
             ]
         }
