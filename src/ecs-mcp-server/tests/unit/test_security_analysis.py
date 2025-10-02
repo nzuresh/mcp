@@ -412,6 +412,167 @@ class TestDataAdapter:
             assert "Cluster data: Access denied for cluster" in cluster_data["errors"]
             assert "Network data: Network configuration failed" in cluster_data["errors"]
 
+    @pytest.mark.anyio
+    @patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
+    async def test_collect_cluster_data_capacity_providers_error(self, mock_ecs_api):
+        """Test cluster data collection when capacity providers API returns error."""
+        # Mock successful cluster response but failed capacity providers
+        mock_cluster_response = {
+            "clusters": [
+                {
+                    "clusterName": "test-cluster",
+                    "clusterArn": "arn:aws:ecs:us-east-1:123456789012:cluster/test-cluster",
+                    "status": "ACTIVE"
+                }
+            ]
+        }
+        
+        mock_capacity_providers_error = {"error": "Access denied", "status": "failed"}
+
+        # Configure mock to return different responses based on operation
+        def mock_ecs_operation(operation, params):
+            if operation == "DescribeClusters":
+                return mock_cluster_response
+            elif operation == "DescribeCapacityProviders":
+                return mock_capacity_providers_error
+            else:
+                return {"error": "Unknown operation"}
+
+        mock_ecs_api.side_effect = mock_ecs_operation
+
+        # Call the method
+        result = await self.data_adapter.collect_cluster_data("test-cluster", "us-east-1")
+
+        # Verify the result - should succeed but with empty capacity providers
+        assert result["status"] == "success"
+        assert result["cluster_name"] == "test-cluster"
+        assert result["capacity_providers"] == []  # Should be empty due to error
+
+    @pytest.mark.anyio
+    @patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
+    async def test_collect_service_data_list_services_error(self, mock_ecs_api):
+        """Test service data collection when ListServices returns error."""
+        # Mock error response for ListServices
+        mock_ecs_api.return_value = {"error": "Access denied", "status": "failed"}
+
+        # Call the method
+        result = await self.data_adapter.collect_service_data("test-cluster")
+
+        # Verify the result - should succeed with empty services
+        assert result["status"] == "success"
+        assert result["cluster_name"] == "test-cluster"
+        assert result["services"] == []
+
+    @pytest.mark.anyio
+    @patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
+    async def test_collect_service_data_describe_services_error(self, mock_ecs_api):
+        """Test service data collection when DescribeServices returns error."""
+        # Mock successful list but failed describe
+        def mock_ecs_operation(operation, params):
+            if operation == "ListServices":
+                return {
+                    "serviceArns": [
+                        "arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service"
+                    ]
+                }
+            elif operation == "DescribeServices":
+                return {"error": "Service not found", "status": "failed"}
+            else:
+                return {"error": "Unknown operation"}
+
+        mock_ecs_api.side_effect = mock_ecs_operation
+
+        # Call the method
+        result = await self.data_adapter.collect_service_data("test-cluster")
+
+        # Verify the result - should succeed but with no services due to describe error
+        assert result["status"] == "success"
+        assert result["cluster_name"] == "test-cluster"
+        assert result["services"] == []  # Should be empty due to describe error
+
+    @pytest.mark.anyio
+    @patch("awslabs.ecs_mcp_server.api.security_analysis.find_task_definitions")
+    @patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
+    async def test_collect_service_data_with_task_definition_fallback(self, mock_ecs_api, mock_find_task_defs):
+        """Test service data collection with task definition fallback."""
+        # Mock service responses
+        mock_list_services_response = {
+            "serviceArns": [
+                "arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service"
+            ]
+        }
+        
+        mock_describe_services_response = {
+            "services": [
+                {
+                    "serviceName": "test-service",
+                    "serviceArn": "arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service",
+                    "status": "ACTIVE",
+                    "taskDefinition": "arn:aws:ecs:us-east-1:123456789012:task-definition/test-task:1"
+                }
+            ]
+        }
+        
+        # Mock empty task definitions from find_task_definitions (to trigger fallback)
+        mock_find_task_defs.return_value = []
+        
+        # Mock task definition response for fallback
+        mock_task_def_response = {
+            "taskDefinition": {
+                "family": "test-task",
+                "revision": 1,
+                "containerDefinitions": [
+                    {
+                        "name": "test-container",
+                        "image": "nginx:latest"
+                    }
+                ]
+            }
+        }
+
+        # Configure mock to return different responses based on operation
+        def mock_ecs_operation(operation, params):
+            if operation == "ListServices":
+                return mock_list_services_response
+            elif operation == "DescribeServices":
+                return mock_describe_services_response
+            elif operation == "DescribeTaskDefinition":
+                return mock_task_def_response
+            elif operation == "ListTagsForResource":
+                return {"tags": []}
+            elif operation == "ListTasks":
+                return {"taskArns": []}
+            else:
+                return {"error": "Unknown operation"}
+
+        mock_ecs_api.side_effect = mock_ecs_operation
+
+        # Call the method
+        result = await self.data_adapter.collect_service_data("test-cluster")
+
+        # Verify the result
+        assert result["status"] == "success"
+        assert len(result["services"]) == 1
+        
+        service_data = result["services"][0]
+        assert service_data["service"]["serviceName"] == "test-service"
+        assert service_data["task_definition"]["family"] == "test-task"
+
+    @pytest.mark.anyio
+    async def test_adapt_to_security_format_exception(self):
+        """Test data adaptation when an exception occurs."""
+        # Mock the collect_cluster_data to raise an exception
+        with patch.object(self.data_adapter, 'collect_cluster_data') as mock_cluster:
+            mock_cluster.side_effect = Exception("Unexpected error")
+
+            # Call the method
+            result = await self.data_adapter.adapt_to_security_format("test-cluster", "us-east-1")
+
+            # Verify the result contains error information
+            assert "us-east-1" in result
+            assert "error" in result["us-east-1"]
+            assert "Unexpected error" in result["us-east-1"]["error"]
+
 
 class TestSecurityAnalyzer:
     """Tests for the SecurityAnalyzer class."""
@@ -831,3 +992,4 @@ class TestAnalyzeEcsSecurity:
 
             # Verify analyzer was still called with empty data
             mock_analyzer.analyze.assert_called_once()
+
