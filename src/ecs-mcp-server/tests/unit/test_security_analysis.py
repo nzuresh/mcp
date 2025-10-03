@@ -303,18 +303,21 @@ class TestAnalyzeEcsSecurityErrorPaths:
     @pytest.mark.anyio
     async def test_analyze_ecs_security_task_definitions_failed(self) -> None:
         """Test analyze_ecs_security with failed task definition collection."""
-        with patch.object(
-            DataAdapter,
-            "collect_cluster_data",
-            return_value={
-                "cluster": {"clusterName": "test-cluster", "settings": []},
-                "cluster_name": "test-cluster",
-                "status": "success",
-            },
-        ), patch.object(
-            DataAdapter,
-            "collect_task_definitions",
-            return_value={"status": "failed", "error": "API error"},
+        with (
+            patch.object(
+                DataAdapter,
+                "collect_cluster_data",
+                return_value={
+                    "cluster": {"clusterName": "test-cluster", "settings": []},
+                    "cluster_name": "test-cluster",
+                    "status": "success",
+                },
+            ),
+            patch.object(
+                DataAdapter,
+                "collect_task_definitions",
+                return_value={"status": "failed", "error": "API error"},
+            ),
         ):
             result = await analyze_ecs_security(
                 cluster_names=["test-cluster"], analysis_scope="comprehensive"
