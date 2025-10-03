@@ -185,3 +185,159 @@ class TestModuleRegistration:
         mock_mcp = MagicMock()
         register_module(mock_mcp)
         mock_mcp.tool.assert_called_once_with(name="analyze_ecs_security")
+
+
+class TestDataAdapterErrorPaths:
+    """Test error handling in DataAdapter."""
+
+    @pytest.mark.anyio
+    async def test_collect_cluster_data_api_error(self) -> None:
+        """Test collect_cluster_data with API error."""
+        adapter = DataAdapter()
+        with patch(
+            "awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation",
+            return_value={"error": "API Error"},
+        ):
+            result = await adapter.collect_cluster_data("test-cluster")
+            assert result["status"] == "failed"
+            assert "error" in result
+
+    @pytest.mark.anyio
+    async def test_collect_cluster_data_empty_clusters(self) -> None:
+        """Test collect_cluster_data with no clusters returned."""
+        adapter = DataAdapter()
+        with patch(
+            "awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation",
+            return_value={"clusters": []},
+        ):
+            result = await adapter.collect_cluster_data("test-cluster")
+            assert result["status"] == "failed"
+            assert "not found" in result["error"]
+
+    @pytest.mark.anyio
+    async def test_collect_cluster_data_exception(self) -> None:
+        """Test collect_cluster_data with exception."""
+        adapter = DataAdapter()
+        with patch(
+            "awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation",
+            side_effect=Exception("Test exception"),
+        ):
+            result = await adapter.collect_cluster_data("test-cluster")
+            assert result["status"] == "failed"
+            assert "error" in result
+
+    @pytest.mark.anyio
+    async def test_collect_task_definitions_list_services_error(self) -> None:
+        """Test collect_task_definitions with ListServices error."""
+        adapter = DataAdapter()
+        with patch(
+            "awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation",
+            return_value={"error": "ListServices failed"},
+        ):
+            result = await adapter.collect_task_definitions("test-cluster")
+            assert result["status"] == "failed"
+            assert "error" in result
+
+    @pytest.mark.anyio
+    async def test_collect_task_definitions_describe_services_error(self) -> None:
+        """Test collect_task_definitions with DescribeServices error."""
+        adapter = DataAdapter()
+        with patch(
+            "awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation",
+            side_effect=[
+                {"serviceArns": ["arn:aws:ecs:us-east-1:123456789012:service/test"]},
+                {"error": "DescribeServices failed"},
+            ],
+        ):
+            result = await adapter.collect_task_definitions("test-cluster")
+            assert result["status"] == "failed"
+            assert "error" in result
+
+    @pytest.mark.anyio
+    async def test_collect_task_definitions_exception(self) -> None:
+        """Test collect_task_definitions with exception."""
+        adapter = DataAdapter()
+        with patch(
+            "awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation",
+            side_effect=Exception("Test exception"),
+        ):
+            result = await adapter.collect_task_definitions("test-cluster")
+            assert result["status"] == "failed"
+            assert "error" in result
+
+
+class TestSecurityAnalyzerErrorPaths:
+    """Test error handling in SecurityAnalyzer."""
+
+    def test_analyze_with_exception(self) -> None:
+        """Test analyze method with exception."""
+        analyzer = SecurityAnalyzer()
+        # Pass invalid data to trigger exception
+        result = analyzer.analyze(None, None)
+        assert result["status"] == "failed"
+        assert "error" in result
+
+
+class TestAnalyzeEcsSecurityErrorPaths:
+    """Test error handling in analyze_ecs_security function."""
+
+    @pytest.mark.anyio
+    async def test_analyze_ecs_security_no_cluster_names(self) -> None:
+        """Test analyze_ecs_security without cluster names."""
+        result = await analyze_ecs_security(cluster_names=None)
+        assert result["status"] == "failed"
+        assert "cluster_names parameter is required" in result["error"]
+
+    @pytest.mark.anyio
+    async def test_analyze_ecs_security_cluster_data_failed(self) -> None:
+        """Test analyze_ecs_security with failed cluster data collection."""
+        with patch.object(
+            DataAdapter,
+            "collect_cluster_data",
+            return_value={"status": "failed", "error": "Cluster not found"},
+        ):
+            result = await analyze_ecs_security(cluster_names=["test-cluster"])
+            assert result["status"] == "success"
+            assert result["total_issues"] == 0
+
+    @pytest.mark.anyio
+    async def test_analyze_ecs_security_task_definitions_failed(self) -> None:
+        """Test analyze_ecs_security with failed task definition collection."""
+        with patch.object(
+            DataAdapter,
+            "collect_cluster_data",
+            return_value={
+                "cluster": {"clusterName": "test-cluster", "settings": []},
+                "cluster_name": "test-cluster",
+                "status": "success",
+            },
+        ), patch.object(
+            DataAdapter,
+            "collect_task_definitions",
+            return_value={"status": "failed", "error": "API error"},
+        ):
+            result = await analyze_ecs_security(
+                cluster_names=["test-cluster"], analysis_scope="comprehensive"
+            )
+            assert result["status"] == "success"
+
+    @pytest.mark.anyio
+    async def test_analyze_ecs_security_cluster_exception(self) -> None:
+        """Test analyze_ecs_security with exception during cluster analysis."""
+        with patch.object(
+            DataAdapter, "collect_cluster_data", side_effect=Exception("Test exception")
+        ):
+            result = await analyze_ecs_security(cluster_names=["test-cluster"])
+            assert result["status"] == "success"
+            assert result["total_issues"] == 0
+
+    @pytest.mark.anyio
+    async def test_analyze_ecs_security_general_exception(self) -> None:
+        """Test analyze_ecs_security with general exception."""
+        with patch(
+            "awslabs.ecs_mcp_server.api.security_analysis.DataAdapter",
+            side_effect=Exception("Test exception"),
+        ):
+            result = await analyze_ecs_security(cluster_names=["test-cluster"])
+            assert result["status"] == "failed"
+            assert "error" in result
