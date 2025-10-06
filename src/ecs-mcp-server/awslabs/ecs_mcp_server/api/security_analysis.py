@@ -68,10 +68,19 @@ async def analyze_ecs_security(
                     # Collect data
                     adapter = DataAdapter(region)
                     cluster_data = await adapter.collect_cluster_data(cluster_name)
+                    container_instances = await adapter.collect_container_instances(cluster_name)
+                    capacity_providers = await adapter.collect_capacity_providers(cluster_name)
+
+                    # Combine all data
+                    combined_data = {
+                        **cluster_data,
+                        "container_instances": container_instances.get("container_instances", []),
+                        "capacity_providers": capacity_providers.get("capacity_providers", []),
+                    }
 
                     # Analyze security
                     analyzer = SecurityAnalyzer(cluster_name, region)
-                    result = analyzer.analyze(cluster_data)
+                    result = analyzer.analyze(combined_data)
 
                     all_results.append(result)
                 except Exception as e:
@@ -177,6 +186,110 @@ class DataAdapter:
             logger.error(f"Error collecting cluster data for {cluster_name}: {e}")
             return {"error": str(e), "cluster_name": cluster_name}
 
+    async def collect_container_instances(self, cluster_name: str) -> Dict[str, Any]:
+        """
+        Collect container instance data for a cluster.
+
+        Args:
+            cluster_name: Name of the cluster
+
+        Returns:
+            Dictionary with container instances data or error
+        """
+        try:
+            # First, list container instance ARNs
+            list_response = await ecs_api_operation(
+                "ListContainerInstances",
+                {"cluster": cluster_name},
+            )
+
+            if "error" in list_response:
+                return {"error": list_response["error"], "cluster_name": cluster_name}
+
+            instance_arns = list_response.get("containerInstanceArns", [])
+
+            # If no instances, return empty list
+            if not instance_arns:
+                return {
+                    "status": "success",
+                    "cluster_name": cluster_name,
+                    "container_instances": [],
+                }
+
+            # Describe the container instances to get detailed information
+            describe_response = await ecs_api_operation(
+                "DescribeContainerInstances",
+                {"cluster": cluster_name, "containerInstances": instance_arns},
+            )
+
+            if "error" in describe_response:
+                return {"error": describe_response["error"], "cluster_name": cluster_name}
+
+            return {
+                "status": "success",
+                "cluster_name": cluster_name,
+                "container_instances": describe_response.get("containerInstances", []),
+            }
+        except Exception as e:
+            logger.error(f"Error collecting container instances for {cluster_name}: {e}")
+            return {"error": str(e), "cluster_name": cluster_name}
+
+    async def collect_capacity_providers(self, cluster_name: str) -> Dict[str, Any]:
+        """
+        Collect capacity provider data for a cluster.
+
+        Args:
+            cluster_name: Name of the cluster
+
+        Returns:
+            Dictionary with capacity providers data or error
+        """
+        try:
+            # Get cluster data which includes capacity provider info
+            cluster_response = await ecs_api_operation(
+                "DescribeClusters",
+                {"clusters": [cluster_name], "include": ["SETTINGS", "CONFIGURATIONS"]},
+            )
+
+            if "error" in cluster_response:
+                return {"error": cluster_response["error"], "cluster_name": cluster_name}
+
+            clusters = cluster_response.get("clusters", [])
+            if not clusters:
+                return {
+                    "error": f"Cluster {cluster_name} not found",
+                    "cluster_name": cluster_name,
+                }
+
+            cluster = clusters[0]
+            capacity_provider_arns = cluster.get("capacityProviders", [])
+
+            # If no capacity providers, return empty list
+            if not capacity_provider_arns:
+                return {
+                    "status": "success",
+                    "cluster_name": cluster_name,
+                    "capacity_providers": [],
+                }
+
+            # Describe the capacity providers to get detailed information
+            describe_response = await ecs_api_operation(
+                "DescribeCapacityProviders",
+                {"capacityProviders": capacity_provider_arns},
+            )
+
+            if "error" in describe_response:
+                return {"error": describe_response["error"], "cluster_name": cluster_name}
+
+            return {
+                "status": "success",
+                "cluster_name": cluster_name,
+                "capacity_providers": describe_response.get("capacityProviders", []),
+            }
+        except Exception as e:
+            logger.error(f"Error collecting capacity providers for {cluster_name}: {e}")
+            return {"error": str(e), "cluster_name": cluster_name}
+
 
 class SecurityAnalyzer:
     """Security analysis engine for ECS resources."""
@@ -258,10 +371,14 @@ class SecurityAnalyzer:
             }
 
         cluster_data = ecs_data.get("cluster", {})
+        container_instances = ecs_data.get("container_instances", [])
+        capacity_providers = ecs_data.get("capacity_providers", [])
 
         # Run security checks (will be implemented in subsequent subtasks)
         self._analyze_cluster_security(cluster_data)
         self._analyze_logging_security(cluster_data)
+        self._analyze_enhanced_cluster_security(container_instances)
+        self._analyze_capacity_providers(capacity_providers)
 
         # Generate summary
         summary = self._generate_summary()
@@ -367,6 +484,319 @@ class SecurityAnalyzer:
                     "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/clusters.html"
                 ],
             )
+
+    def _analyze_enhanced_cluster_security(self, container_instances: List[Dict[str, Any]]) -> None:
+        """
+        Analyze enhanced cluster security including container instances.
+
+        Checks:
+        - ECS agent versions for vulnerabilities
+        - Agent connectivity status
+        - Legacy instance types
+
+        Args:
+            container_instances: List of container instance data dictionaries
+        """
+        if not container_instances:
+            # No container instances to analyze (could be Fargate-only cluster)
+            return
+
+        # Known vulnerable or outdated agent versions (example list)
+        # In production, this should be maintained and updated regularly
+        MINIMUM_RECOMMENDED_AGENT_VERSION = "1.70.0"
+
+        for instance in container_instances:
+            instance_id = instance.get("ec2InstanceId", "unknown")
+            container_instance_arn = instance.get("containerInstanceArn", "")
+            container_instance_id = (
+                container_instance_arn.split("/")[-1] if container_instance_arn else instance_id
+            )
+
+            # Check ECS agent version
+            version_info = instance.get("versionInfo", {})
+            agent_version = version_info.get("agentVersion", "unknown")
+
+            if agent_version != "unknown":
+                # Parse version for comparison
+                if self._is_agent_version_outdated(
+                    agent_version, MINIMUM_RECOMMENDED_AGENT_VERSION
+                ):
+                    self._add_recommendation(
+                        title="🔴 Outdated ECS Agent Version",
+                        severity="High",
+                        category="Container Instance",
+                        resource=container_instance_id,
+                        resource_type="ContainerInstance",
+                        issue=(
+                            f"Container instance {container_instance_id} is running ECS agent "
+                            f"version {agent_version}, which is below the recommended minimum "
+                            f"version {MINIMUM_RECOMMENDED_AGENT_VERSION}. Outdated agents may "
+                            "have security vulnerabilities or lack important features."
+                        ),
+                        recommendation=(
+                            "Update the ECS agent to the latest version to ensure security patches "
+                            "and feature improvements are applied"
+                        ),
+                        remediation_steps=[
+                            "# For Amazon Linux 2 AMI:",
+                            f"# SSH into the instance (EC2 instance ID: {instance_id})",
+                            "sudo yum update -y ecs-init",
+                            "sudo systemctl restart ecs",
+                            "",
+                            "# Or update the AMI to the latest ECS-optimized AMI:",
+                            "# 1. Drain the container instance:",
+                            f"aws ecs update-container-instances-state "
+                            f"--cluster {self.cluster_name} "
+                            f"--container-instances {container_instance_id} --status DRAINING",
+                            "# 2. Wait for tasks to drain",
+                            "# 3. Terminate the instance and launch a new one with the latest AMI",
+                        ],
+                        documentation_links=[
+                            "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/"
+                            "ecs-agent-update.html",
+                            "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/"
+                            "ecs-optimized_AMI.html",
+                        ],
+                    )
+
+            # Check agent connectivity status
+            agent_connected = instance.get("agentConnected", False)
+            status = instance.get("status", "UNKNOWN")
+
+            if not agent_connected or status != "ACTIVE":
+                self._add_recommendation(
+                    title="🔴 Container Instance Connectivity Issue",
+                    severity="High",
+                    category="Container Instance",
+                    resource=container_instance_id,
+                    resource_type="ContainerInstance",
+                    issue=(
+                        f"Container instance {container_instance_id} has connectivity issues. "
+                        f"Agent connected: {agent_connected}, Status: {status}. "
+                        "This prevents the instance from receiving tasks and may indicate "
+                        "network or IAM permission issues."
+                    ),
+                    recommendation=(
+                        "Investigate and resolve connectivity issues. Check network configuration, "
+                        "security groups, IAM roles, and ECS agent logs."
+                    ),
+                    remediation_steps=[
+                        "# Check container instance details:",
+                        f"aws ecs describe-container-instances --cluster {self.cluster_name} "
+                        f"--container-instances {container_instance_id}",
+                        "",
+                        f"# Check ECS agent logs on the instance (EC2 instance ID: {instance_id}):",
+                        "# SSH into the instance and run:",
+                        "sudo cat /var/log/ecs/ecs-agent.log",
+                        "",
+                        "# Verify IAM role has required permissions:",
+                        "# - AmazonEC2ContainerServiceforEC2Role policy",
+                        "",
+                        "# Check security group allows outbound HTTPS (443) to ECS endpoints",
+                    ],
+                    documentation_links=[
+                        "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/"
+                        "troubleshooting.html#agent-connection",
+                        "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/"
+                        "instance_IAM_role.html",
+                    ],
+                )
+
+            # Check for legacy instance types
+            attributes = instance.get("attributes", [])
+            instance_type = None
+            for attr in attributes:
+                if attr.get("name") == "ecs.instance-type":
+                    instance_type = attr.get("value")
+                    break
+
+            if instance_type:
+                # Check for legacy instance types (t2, m4, c4, r4, etc.)
+                legacy_families = ["t2", "m4", "c4", "r4", "i3", "d2", "x1"]
+                instance_family = instance_type.split(".")[0] if "." in instance_type else ""
+
+                if instance_family in legacy_families:
+                    self._add_recommendation(
+                        title="🟡 Legacy Instance Type Detected",
+                        severity="Medium",
+                        category="Container Instance",
+                        resource=container_instance_id,
+                        resource_type="ContainerInstance",
+                        issue=(
+                            f"Container instance {container_instance_id} is using legacy instance "
+                            f"type {instance_type}. Newer generation instance types offer better "
+                            "performance, security features, and cost efficiency."
+                        ),
+                        recommendation=(
+                            "Migrate to current generation instance types (e.g., t3, m5, c5, r5) "
+                            "for improved performance and security features like "
+                            "enhanced networking and Nitro System security."
+                        ),
+                        remediation_steps=[
+                            "# Plan migration to current generation instances:",
+                            "# 1. Update your Auto Scaling Group or launch template",
+                            "# 2. Gradually replace instances:",
+                            f"aws ecs update-container-instances-state "
+                            f"--cluster {self.cluster_name} "
+                            f"--container-instances {container_instance_id} --status DRAINING",
+                            "# 3. Wait for tasks to drain, then terminate the old instance",
+                            "# 4. New instance will launch with updated instance type",
+                        ],
+                        documentation_links=[
+                            "https://aws.amazon.com/ec2/instance-types/",
+                            "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-types.html",
+                        ],
+                    )
+
+    def _analyze_capacity_providers(self, capacity_providers: List[Dict[str, Any]]) -> None:
+        """
+        Analyze capacity provider security configurations.
+
+        Checks:
+        - Managed termination protection
+        - Auto-scaling security configurations
+
+        Args:
+            capacity_providers: List of capacity provider data dictionaries
+        """
+        if not capacity_providers:
+            # No capacity providers configured
+            return
+
+        for provider in capacity_providers:
+            provider_name = provider.get("name", "unknown")
+
+            # Check if this is an Auto Scaling Group capacity provider
+            auto_scaling_group = provider.get("autoScalingGroupProvider")
+            if not auto_scaling_group:
+                # This is likely a Fargate capacity provider, skip
+                continue
+
+            # Check managed termination protection
+            managed_termination_protection = auto_scaling_group.get(
+                "managedTerminationProtection", "DISABLED"
+            )
+
+            if managed_termination_protection == "DISABLED":
+                self._add_recommendation(
+                    title="🟡 Managed Termination Protection Disabled",
+                    severity="Medium",
+                    category="Capacity Provider",
+                    resource=provider_name,
+                    resource_type="CapacityProvider",
+                    issue=(
+                        f"Capacity provider {provider_name} has managed termination protection "
+                        "disabled. This means ECS cannot prevent Amazon EC2 Auto Scaling from "
+                        "terminating instances that have running tasks during scale-in events."
+                    ),
+                    recommendation=(
+                        "Enable managed termination protection to prevent premature termination "
+                        "of instances with running tasks, ensuring graceful task shutdown."
+                    ),
+                    remediation_steps=[
+                        "# Update capacity provider to enable managed termination protection:",
+                        f"aws ecs update-capacity-provider --name {provider_name} "
+                        "--auto-scaling-group-provider "
+                        "managedTerminationProtection=ENABLED",
+                    ],
+                    documentation_links=[
+                        "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/"
+                        "asg-capacity-providers.html#asg-capacity-providers-termination-protection",
+                    ],
+                )
+
+            # Check managed scaling configuration
+            managed_scaling = auto_scaling_group.get("managedScaling", {})
+            if managed_scaling:
+                status = managed_scaling.get("status", "DISABLED")
+                target_capacity = managed_scaling.get("targetCapacity", 100)
+
+                # Check if managed scaling is enabled
+                if status == "DISABLED":
+                    self._add_recommendation(
+                        title="🟢 Managed Scaling Disabled",
+                        severity="Low",
+                        category="Capacity Provider",
+                        resource=provider_name,
+                        resource_type="CapacityProvider",
+                        issue=(
+                            f"Capacity provider {provider_name} has managed scaling disabled. "
+                            "While not a security issue, this means ECS cannot automatically "
+                            "scale your Auto Scaling Group based on task requirements."
+                        ),
+                        recommendation=(
+                            "Consider enabling managed scaling to allow ECS to automatically "
+                            "manage your cluster capacity based on task requirements."
+                        ),
+                        remediation_steps=[
+                            "# Enable managed scaling for capacity provider:",
+                            f"aws ecs update-capacity-provider --name {provider_name} "
+                            "--auto-scaling-group-provider "
+                            "managedScaling={status=ENABLED,targetCapacity=100,"
+                            "minimumScalingStepSize=1,maximumScalingStepSize=10000}",
+                        ],
+                        documentation_links=[
+                            "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/"
+                            "asg-capacity-providers.html#asg-capacity-providers-managed-scaling",
+                        ],
+                    )
+                elif target_capacity < 80 or target_capacity > 100:
+                    # Target capacity outside recommended range
+                    self._add_recommendation(
+                        title="🟡 Suboptimal Target Capacity Configuration",
+                        severity="Medium",
+                        category="Capacity Provider",
+                        resource=provider_name,
+                        resource_type="CapacityProvider",
+                        issue=(
+                            f"Capacity provider {provider_name} has target capacity set to "
+                            f"{target_capacity}%. AWS recommends a target capacity between 80-100% "
+                            "for optimal resource utilization and cost efficiency."
+                        ),
+                        recommendation=(
+                            "Adjust target capacity to 80-100% range. Lower values may lead to "
+                            "over-provisioning and higher costs, while values above 100% "
+                            "are invalid."
+                        ),
+                        remediation_steps=[
+                            "# Update target capacity to recommended range:",
+                            f"aws ecs update-capacity-provider --name {provider_name} "
+                            "--auto-scaling-group-provider "
+                            f"managedScaling={{status=ENABLED,targetCapacity=100,"
+                            "minimumScalingStepSize=1,maximumScalingStepSize=10000}",
+                        ],
+                        documentation_links=[
+                            "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/"
+                            "asg-capacity-providers.html#asg-capacity-providers-managed-scaling",
+                        ],
+                    )
+
+    def _is_agent_version_outdated(self, current_version: str, minimum_version: str) -> bool:
+        """
+        Compare ECS agent versions to determine if current version is outdated.
+
+        Args:
+            current_version: Current agent version (e.g., "1.68.2")
+            minimum_version: Minimum recommended version (e.g., "1.70.0")
+
+        Returns:
+            True if current version is outdated, False otherwise
+        """
+        try:
+            # Parse versions into tuples of integers for comparison
+            current_parts = [int(x) for x in current_version.split(".")]
+            minimum_parts = [int(x) for x in minimum_version.split(".")]
+
+            # Pad shorter version with zeros
+            max_len = max(len(current_parts), len(minimum_parts))
+            current_parts.extend([0] * (max_len - len(current_parts)))
+            minimum_parts.extend([0] * (max_len - len(minimum_parts)))
+
+            # Compare versions
+            return current_parts < minimum_parts
+        except (ValueError, AttributeError):
+            # If version parsing fails, assume it's outdated to be safe
+            return True
 
     def _analyze_logging_security(self, cluster: Dict[str, Any]) -> None:
         """

@@ -403,3 +403,611 @@ async def test_default_region(mock_api, secure_cluster):
     result = await analyze_ecs_security(cluster_names=["test"], regions=None)
 
     assert result["results"][0]["region"] == "us-east-1"
+
+
+# ----------------------------------------------------------------------------
+# Enhanced Cluster Security Tests
+# ----------------------------------------------------------------------------
+
+
+class TestEnhancedClusterSecurity:
+    """Tests for enhanced cluster security analysis including container instances."""
+
+    @pytest.fixture
+    def container_instance_healthy(self):
+        """Healthy container instance with current agent."""
+        return {
+            "containerInstanceArn": "arn:aws:ecs:us-east-1:123:container-instance/abc123",
+            "ec2InstanceId": "i-1234567890abcdef0",
+            "versionInfo": {"agentVersion": "1.75.0"},
+            "agentConnected": True,
+            "status": "ACTIVE",
+            "attributes": [
+                {"name": "ecs.instance-type", "value": "t3.medium"},
+            ],
+        }
+
+    @pytest.fixture
+    def container_instance_outdated_agent(self):
+        """Container instance with outdated agent."""
+        return {
+            "containerInstanceArn": "arn:aws:ecs:us-east-1:123:container-instance/def456",
+            "ec2InstanceId": "i-0987654321fedcba0",
+            "versionInfo": {"agentVersion": "1.65.0"},
+            "agentConnected": True,
+            "status": "ACTIVE",
+            "attributes": [
+                {"name": "ecs.instance-type", "value": "t3.large"},
+            ],
+        }
+
+    @pytest.fixture
+    def container_instance_disconnected(self):
+        """Container instance with connectivity issues."""
+        return {
+            "containerInstanceArn": "arn:aws:ecs:us-east-1:123:container-instance/ghi789",
+            "ec2InstanceId": "i-abcdef1234567890",
+            "versionInfo": {"agentVersion": "1.75.0"},
+            "agentConnected": False,
+            "status": "DRAINING",
+            "attributes": [
+                {"name": "ecs.instance-type", "value": "m5.xlarge"},
+            ],
+        }
+
+    @pytest.fixture
+    def container_instance_legacy_type(self):
+        """Container instance with legacy instance type."""
+        return {
+            "containerInstanceArn": "arn:aws:ecs:us-east-1:123:container-instance/jkl012",
+            "ec2InstanceId": "i-legacy123456789",
+            "versionInfo": {"agentVersion": "1.75.0"},
+            "agentConnected": True,
+            "status": "ACTIVE",
+            "attributes": [
+                {"name": "ecs.instance-type", "value": "t2.micro"},
+            ],
+        }
+
+    @pytest.mark.anyio
+    @patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
+    async def test_collect_container_instances_success(self, mock_api):
+        """Test successful container instance collection."""
+        mock_api.side_effect = [
+            {"containerInstanceArns": ["arn:aws:ecs:us-east-1:123:container-instance/abc"]},
+            {
+                "containerInstances": [
+                    {"containerInstanceArn": "arn:aws:ecs:us-east-1:123:container-instance/abc"}
+                ]
+            },
+        ]
+
+        adapter = DataAdapter("us-east-1")
+        result = await adapter.collect_container_instances("test-cluster")
+
+        assert result["status"] == "success"
+        assert len(result["container_instances"]) == 1
+
+    @pytest.mark.anyio
+    @patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
+    async def test_collect_container_instances_empty(self, mock_api):
+        """Test collection when no container instances exist."""
+        mock_api.return_value = {"containerInstanceArns": []}
+
+        adapter = DataAdapter("us-east-1")
+        result = await adapter.collect_container_instances("test-cluster")
+
+        assert result["status"] == "success"
+        assert result["container_instances"] == []
+
+    @pytest.mark.anyio
+    @patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
+    async def test_collect_container_instances_error(self, mock_api):
+        """Test error handling in container instance collection."""
+        mock_api.return_value = {"error": "AccessDenied"}
+
+        adapter = DataAdapter("us-east-1")
+        result = await adapter.collect_container_instances("test-cluster")
+
+        assert "error" in result
+
+    def test_outdated_agent_detection(self, container_instance_outdated_agent):
+        """Test detection of outdated ECS agent."""
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        result = analyzer.analyze(
+            {
+                "cluster": {"clusterName": "test-cluster", "status": "ACTIVE", "settings": []},
+                "container_instances": [container_instance_outdated_agent],
+            }
+        )
+
+        outdated_recs = [r for r in result["recommendations"] if "Outdated ECS Agent" in r["title"]]
+        assert len(outdated_recs) == 1
+        assert outdated_recs[0]["severity"] == "High"
+        assert "1.65.0" in outdated_recs[0]["issue"]
+
+    def test_agent_connectivity_issue(self, container_instance_disconnected):
+        """Test detection of agent connectivity issues."""
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        result = analyzer.analyze(
+            {
+                "cluster": {"clusterName": "test-cluster", "status": "ACTIVE", "settings": []},
+                "container_instances": [container_instance_disconnected],
+            }
+        )
+
+        connectivity_recs = [
+            r for r in result["recommendations"] if "Connectivity Issue" in r["title"]
+        ]
+        assert len(connectivity_recs) == 1
+        assert connectivity_recs[0]["severity"] == "High"
+        assert "agent connected" in connectivity_recs[0]["issue"].lower()
+
+    def test_legacy_instance_type_detection(self, container_instance_legacy_type):
+        """Test detection of legacy instance types."""
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        result = analyzer.analyze(
+            {
+                "cluster": {"clusterName": "test-cluster", "status": "ACTIVE", "settings": []},
+                "container_instances": [container_instance_legacy_type],
+            }
+        )
+
+        legacy_recs = [r for r in result["recommendations"] if "Legacy Instance Type" in r["title"]]
+        assert len(legacy_recs) == 1
+        assert legacy_recs[0]["severity"] == "Medium"
+        assert "t2.micro" in legacy_recs[0]["issue"]
+
+    def test_healthy_container_instance_no_recommendations(self, container_instance_healthy):
+        """Test that healthy container instances generate no recommendations."""
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        result = analyzer.analyze(
+            {
+                "cluster": {
+                    "clusterName": "test-cluster",
+                    "status": "ACTIVE",
+                    "settings": [{"name": "containerInsights", "value": "enabled"}],
+                },
+                "container_instances": [container_instance_healthy],
+            }
+        )
+
+        # Should have no container instance related recommendations
+        instance_recs = [
+            r for r in result["recommendations"] if r["resource_type"] == "ContainerInstance"
+        ]
+        assert len(instance_recs) == 0
+
+    def test_multiple_container_instances(
+        self,
+        container_instance_healthy,
+        container_instance_outdated_agent,
+        container_instance_legacy_type,
+    ):
+        """Test analysis of multiple container instances."""
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        result = analyzer.analyze(
+            {
+                "cluster": {"clusterName": "test-cluster", "status": "ACTIVE", "settings": []},
+                "container_instances": [
+                    container_instance_healthy,
+                    container_instance_outdated_agent,
+                    container_instance_legacy_type,
+                ],
+            }
+        )
+
+        instance_recs = [
+            r for r in result["recommendations"] if r["resource_type"] == "ContainerInstance"
+        ]
+        # Should have 2 recommendations: outdated agent + legacy type
+        assert len(instance_recs) == 2
+
+    @pytest.mark.parametrize(
+        "current_version,minimum_version,expected_outdated",
+        [
+            ("1.75.0", "1.70.0", False),
+            ("1.70.0", "1.70.0", False),
+            ("1.69.9", "1.70.0", True),
+            ("1.65.0", "1.70.0", True),
+            ("2.0.0", "1.70.0", False),
+            ("1.70.1", "1.70.0", False),
+        ],
+    )
+    def test_agent_version_comparison(self, current_version, minimum_version, expected_outdated):
+        """Test agent version comparison logic."""
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        result = analyzer._is_agent_version_outdated(current_version, minimum_version)
+        assert result == expected_outdated
+
+    def test_agent_version_comparison_invalid(self):
+        """Test agent version comparison with invalid versions."""
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        # Invalid versions should be considered outdated for safety
+        assert analyzer._is_agent_version_outdated("invalid", "1.70.0") is True
+        assert analyzer._is_agent_version_outdated("1.70.0", "invalid") is True
+
+    def test_no_container_instances(self):
+        """Test analysis when cluster has no container instances (Fargate-only)."""
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        result = analyzer.analyze(
+            {
+                "cluster": {"clusterName": "test-cluster", "status": "ACTIVE", "settings": []},
+                "container_instances": [],
+            }
+        )
+
+        # Should not crash and should have no container instance recommendations
+        instance_recs = [
+            r for r in result["recommendations"] if r["resource_type"] == "ContainerInstance"
+        ]
+        assert len(instance_recs) == 0
+
+    @pytest.mark.parametrize(
+        "instance_family,expected_legacy",
+        [
+            ("t3", False),
+            ("t2", True),
+            ("m5", False),
+            ("m4", True),
+            ("c5", False),
+            ("c4", True),
+            ("r5", False),
+            ("r4", True),
+        ],
+    )
+    def test_legacy_instance_family_detection(self, instance_family, expected_legacy):
+        """Test detection of various legacy instance families."""
+        instance = {
+            "containerInstanceArn": "arn:aws:ecs:us-east-1:123:container-instance/test",
+            "ec2InstanceId": "i-test",
+            "versionInfo": {"agentVersion": "1.75.0"},
+            "agentConnected": True,
+            "status": "ACTIVE",
+            "attributes": [
+                {"name": "ecs.instance-type", "value": f"{instance_family}.large"},
+            ],
+        }
+
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        result = analyzer.analyze(
+            {
+                "cluster": {"clusterName": "test-cluster", "status": "ACTIVE", "settings": []},
+                "container_instances": [instance],
+            }
+        )
+
+        legacy_recs = [r for r in result["recommendations"] if "Legacy Instance Type" in r["title"]]
+        assert (len(legacy_recs) > 0) == expected_legacy
+
+
+# ----------------------------------------------------------------------------
+# Capacity Provider Tests
+# ----------------------------------------------------------------------------
+
+
+class TestCapacityProviders:
+    """Tests for capacity provider security analysis."""
+
+    @pytest.fixture
+    def capacity_provider_secure(self):
+        """Secure capacity provider configuration."""
+        return {
+            "name": "secure-provider",
+            "capacityProviderArn": "arn:aws:ecs:us-east-1:123:capacity-provider/secure-provider",
+            "autoScalingGroupProvider": {
+                "autoScalingGroupArn": "arn:aws:autoscaling:us-east-1:123:autoScalingGroup:abc",
+                "managedTerminationProtection": "ENABLED",
+                "managedScaling": {
+                    "status": "ENABLED",
+                    "targetCapacity": 100,
+                    "minimumScalingStepSize": 1,
+                    "maximumScalingStepSize": 10000,
+                },
+            },
+        }
+
+    @pytest.fixture
+    def capacity_provider_no_termination_protection(self):
+        """Capacity provider without termination protection."""
+        return {
+            "name": "unprotected-provider",
+            "capacityProviderArn": (
+                "arn:aws:ecs:us-east-1:123:capacity-provider/unprotected-provider"
+            ),
+            "autoScalingGroupProvider": {
+                "autoScalingGroupArn": "arn:aws:autoscaling:us-east-1:123:autoScalingGroup:def",
+                "managedTerminationProtection": "DISABLED",
+                "managedScaling": {
+                    "status": "ENABLED",
+                    "targetCapacity": 100,
+                },
+            },
+        }
+
+    @pytest.fixture
+    def capacity_provider_no_managed_scaling(self):
+        """Capacity provider without managed scaling."""
+        return {
+            "name": "no-scaling-provider",
+            "capacityProviderArn": (
+                "arn:aws:ecs:us-east-1:123:capacity-provider/no-scaling-provider"
+            ),
+            "autoScalingGroupProvider": {
+                "autoScalingGroupArn": "arn:aws:autoscaling:us-east-1:123:autoScalingGroup:ghi",
+                "managedTerminationProtection": "ENABLED",
+                "managedScaling": {
+                    "status": "DISABLED",
+                },
+            },
+        }
+
+    @pytest.fixture
+    def capacity_provider_suboptimal_target(self):
+        """Capacity provider with suboptimal target capacity."""
+        return {
+            "name": "suboptimal-provider",
+            "capacityProviderArn": (
+                "arn:aws:ecs:us-east-1:123:capacity-provider/suboptimal-provider"
+            ),
+            "autoScalingGroupProvider": {
+                "autoScalingGroupArn": "arn:aws:autoscaling:us-east-1:123:autoScalingGroup:jkl",
+                "managedTerminationProtection": "ENABLED",
+                "managedScaling": {
+                    "status": "ENABLED",
+                    "targetCapacity": 50,
+                },
+            },
+        }
+
+    @pytest.fixture
+    def capacity_provider_fargate(self):
+        """Fargate capacity provider (no auto scaling group)."""
+        return {
+            "name": "FARGATE",
+            "capacityProviderArn": "arn:aws:ecs:us-east-1:123:capacity-provider/FARGATE",
+        }
+
+    @pytest.mark.anyio
+    @patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
+    async def test_collect_capacity_providers_success(self, mock_api):
+        """Test successful capacity provider collection."""
+        mock_api.side_effect = [
+            {
+                "clusters": [
+                    {
+                        "clusterName": "test",
+                        "capacityProviders": ["arn:aws:ecs:us-east-1:123:capacity-provider/test"],
+                    }
+                ]
+            },
+            {
+                "capacityProviders": [
+                    {
+                        "name": "test",
+                        "capacityProviderArn": "arn:aws:ecs:us-east-1:123:capacity-provider/test",
+                    }
+                ]
+            },
+        ]
+
+        adapter = DataAdapter("us-east-1")
+        result = await adapter.collect_capacity_providers("test-cluster")
+
+        assert result["status"] == "success"
+        assert len(result["capacity_providers"]) == 1
+
+    @pytest.mark.anyio
+    @patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
+    async def test_collect_capacity_providers_empty(self, mock_api):
+        """Test collection when no capacity providers exist."""
+        mock_api.return_value = {"clusters": [{"clusterName": "test", "capacityProviders": []}]}
+
+        adapter = DataAdapter("us-east-1")
+        result = await adapter.collect_capacity_providers("test-cluster")
+
+        assert result["status"] == "success"
+        assert result["capacity_providers"] == []
+
+    @pytest.mark.anyio
+    @patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
+    async def test_collect_capacity_providers_error(self, mock_api):
+        """Test error handling in capacity provider collection."""
+        mock_api.return_value = {"error": "AccessDenied"}
+
+        adapter = DataAdapter("us-east-1")
+        result = await adapter.collect_capacity_providers("test-cluster")
+
+        assert "error" in result
+
+    def test_termination_protection_disabled(self, capacity_provider_no_termination_protection):
+        """Test detection of disabled termination protection."""
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        result = analyzer.analyze(
+            {
+                "cluster": {"clusterName": "test-cluster", "status": "ACTIVE", "settings": []},
+                "capacity_providers": [capacity_provider_no_termination_protection],
+            }
+        )
+
+        protection_recs = [
+            r for r in result["recommendations"] if "Termination Protection" in r["title"]
+        ]
+        assert len(protection_recs) == 1
+        assert protection_recs[0]["severity"] == "Medium"
+
+    def test_managed_scaling_disabled(self, capacity_provider_no_managed_scaling):
+        """Test detection of disabled managed scaling."""
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        result = analyzer.analyze(
+            {
+                "cluster": {"clusterName": "test-cluster", "status": "ACTIVE", "settings": []},
+                "capacity_providers": [capacity_provider_no_managed_scaling],
+            }
+        )
+
+        scaling_recs = [r for r in result["recommendations"] if "Managed Scaling" in r["title"]]
+        assert len(scaling_recs) == 1
+        assert scaling_recs[0]["severity"] == "Low"
+
+    def test_suboptimal_target_capacity(self, capacity_provider_suboptimal_target):
+        """Test detection of suboptimal target capacity."""
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        result = analyzer.analyze(
+            {
+                "cluster": {"clusterName": "test-cluster", "status": "ACTIVE", "settings": []},
+                "capacity_providers": [capacity_provider_suboptimal_target],
+            }
+        )
+
+        target_recs = [r for r in result["recommendations"] if "Target Capacity" in r["title"]]
+        assert len(target_recs) == 1
+        assert target_recs[0]["severity"] == "Medium"
+        assert "50%" in target_recs[0]["issue"]
+
+    def test_secure_capacity_provider_no_recommendations(self, capacity_provider_secure):
+        """Test that secure capacity provider generates no recommendations."""
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        result = analyzer.analyze(
+            {
+                "cluster": {"clusterName": "test-cluster", "status": "ACTIVE", "settings": []},
+                "capacity_providers": [capacity_provider_secure],
+            }
+        )
+
+        cp_recs = [r for r in result["recommendations"] if r["resource_type"] == "CapacityProvider"]
+        assert len(cp_recs) == 0
+
+    def test_fargate_capacity_provider_ignored(self, capacity_provider_fargate):
+        """Test that Fargate capacity providers are ignored."""
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        result = analyzer.analyze(
+            {
+                "cluster": {"clusterName": "test-cluster", "status": "ACTIVE", "settings": []},
+                "capacity_providers": [capacity_provider_fargate],
+            }
+        )
+
+        cp_recs = [r for r in result["recommendations"] if r["resource_type"] == "CapacityProvider"]
+        assert len(cp_recs) == 0
+
+    def test_multiple_capacity_providers(
+        self,
+        capacity_provider_secure,
+        capacity_provider_no_termination_protection,
+        capacity_provider_suboptimal_target,
+    ):
+        """Test analysis of multiple capacity providers."""
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        result = analyzer.analyze(
+            {
+                "cluster": {"clusterName": "test-cluster", "status": "ACTIVE", "settings": []},
+                "capacity_providers": [
+                    capacity_provider_secure,
+                    capacity_provider_no_termination_protection,
+                    capacity_provider_suboptimal_target,
+                ],
+            }
+        )
+
+        cp_recs = [r for r in result["recommendations"] if r["resource_type"] == "CapacityProvider"]
+        # Should have 2 recommendations: no termination protection + suboptimal target
+        assert len(cp_recs) == 2
+
+    def test_no_capacity_providers(self):
+        """Test analysis when cluster has no capacity providers."""
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        result = analyzer.analyze(
+            {
+                "cluster": {"clusterName": "test-cluster", "status": "ACTIVE", "settings": []},
+                "capacity_providers": [],
+            }
+        )
+
+        cp_recs = [r for r in result["recommendations"] if r["resource_type"] == "CapacityProvider"]
+        assert len(cp_recs) == 0
+
+    @pytest.mark.parametrize(
+        "target_capacity,expected_recommendation",
+        [
+            (100, False),  # Optimal
+            (90, False),  # Within range
+            (80, False),  # Minimum acceptable
+            (79, True),  # Below range
+            (50, True),  # Well below range
+            (101, True),  # Above range
+        ],
+    )
+    def test_target_capacity_ranges(self, target_capacity, expected_recommendation):
+        """Test various target capacity values."""
+        provider = {
+            "name": "test-provider",
+            "capacityProviderArn": "arn:aws:ecs:us-east-1:123:capacity-provider/test",
+            "autoScalingGroupProvider": {
+                "autoScalingGroupArn": "arn:aws:autoscaling:us-east-1:123:autoScalingGroup:test",
+                "managedTerminationProtection": "ENABLED",
+                "managedScaling": {
+                    "status": "ENABLED",
+                    "targetCapacity": target_capacity,
+                },
+            },
+        }
+
+        analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+        result = analyzer.analyze(
+            {
+                "cluster": {"clusterName": "test-cluster", "status": "ACTIVE", "settings": []},
+                "capacity_providers": [provider],
+            }
+        )
+
+        target_recs = [r for r in result["recommendations"] if "Target Capacity" in r["title"]]
+        assert (len(target_recs) > 0) == expected_recommendation
+
+
+# ----------------------------------------------------------------------------
+# Additional Coverage Tests for Error Paths
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
+async def test_collect_container_instances_describe_error(mock_api):
+    """Test error handling when describe operation fails."""
+    mock_api.side_effect = [
+        {"containerInstanceArns": ["arn:aws:ecs:us-east-1:123:container-instance/abc"]},
+        {"error": "DescribeError"},
+    ]
+
+    adapter = DataAdapter("us-east-1")
+    result = await adapter.collect_container_instances("test-cluster")
+
+    assert "error" in result
+    assert result["error"] == "DescribeError"
+
+
+@pytest.mark.anyio
+@patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
+async def test_collect_capacity_providers_describe_error(mock_api):
+    """Test error handling when describe capacity providers fails."""
+    mock_api.side_effect = [
+        {"clusters": [{"clusterName": "test", "capacityProviders": ["arn:test"]}]},
+        {"error": "DescribeError"},
+    ]
+
+    adapter = DataAdapter("us-east-1")
+    result = await adapter.collect_capacity_providers("test-cluster")
+
+    assert "error" in result
+    assert result["error"] == "DescribeError"
+
+
+@pytest.mark.anyio
+async def test_analyze_region_exception():
+    """Test exception handling at region level."""
+    with patch.object(DataAdapter, "collect_cluster_data", side_effect=Exception("Region error")):
+        result = await analyze_ecs_security(cluster_names=["test"], regions=["us-east-1"])
+
+        assert "errors" in result
+        assert len(result["errors"]) > 0
+        assert any("Region error" in str(e.get("error", "")) for e in result["errors"])

@@ -106,11 +106,25 @@ def register_module(mcp: FastMCP) -> None:
         6. Re-run the analysis after implementing fixes to verify improvements
 
         The analysis includes:
+
+        Cluster Configuration:
         - Container Insights monitoring configuration
         - Execute command logging settings
         - Cluster status and availability
         - CloudWatch logging configuration
         - Log encryption settings
+
+        Container Instance Security:
+        - ECS agent version validation (flags versions below 1.70.0)
+        - Agent connectivity status and instance health
+        - Legacy instance type detection (t2, m4, c4, r4 families)
+        - Modern security feature availability (Nitro System)
+
+        Capacity Provider Security:
+        - Managed termination protection configuration
+        - Auto-scaling security settings
+        - Target capacity optimization (80-100% range)
+        - Managed scaling status
 
         Parameters:
             cluster_names: REQUIRED list of cluster names to analyze.
