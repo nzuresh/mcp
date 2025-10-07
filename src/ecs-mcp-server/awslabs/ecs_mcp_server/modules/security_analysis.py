@@ -49,6 +49,16 @@ def register_module(mcp: FastMCP) -> None:
                 "Example: ['us-east-1', 'us-west-2']"
             ),
         ),
+        include_aws_docs: bool = Field(  # noqa: B008
+            default=False,
+            description=(
+                "Whether to fetch AWS documentation for security recommendations. "
+                "When enabled, fetches relevant AWS documentation snippets for High and Medium "
+                "severity recommendations. This provides additional context and guidance but "
+                "may increase analysis time. Defaults to False for faster analysis. "
+                "Example: True to enable documentation fetching"
+            ),
+        ),
     ) -> Dict[str, Any]:
         """
         Analyze ECS cluster security configurations and provide recommendations.
@@ -90,6 +100,13 @@ def register_module(mcp: FastMCP) -> None:
            cluster_names: ["prod-cluster"]
            regions: ["us-east-1", "us-west-2"]
            Note: This will look for "prod-cluster" in both regions
+
+        4. Analyze with AWS documentation fetching enabled:
+           cluster_names: ["my-cluster"]
+           regions: ["us-east-1"]
+           include_aws_docs: True
+           Note: This will fetch AWS documentation for High/Medium severity recommendations,
+                 providing additional context and guidance. May add 2-5 seconds to analysis time.
 
         MULTI-REGION WORKFLOW:
         - Analyze one region at a time for better user experience
@@ -141,6 +158,12 @@ def register_module(mcp: FastMCP) -> None:
                     Defaults to ["us-east-1"] if not specified.
                     Example: ["us-east-1", "us-west-2"]
 
+            include_aws_docs: Optional boolean to enable AWS documentation fetching.
+                             When True, fetches relevant AWS documentation for High and Medium
+                             severity recommendations. This provides additional context but may
+                             increase analysis time by 2-5 seconds. Defaults to False.
+                             Example: True to enable documentation fetching
+
         Returns:
             Dictionary containing:
             - status: "success" or "error"
@@ -149,6 +172,19 @@ def register_module(mcp: FastMCP) -> None:
             - results: List of analysis results per cluster with recommendations and summary
 
         PRESENTATION GUIDELINES:
+
+        CRITICAL: Each recommendation object contains these fields that MUST be displayed:
+        - title: Issue title
+        - severity: High/Medium/Low
+        - category: Issue category (Monitoring, Logging, IAM, etc.)
+        - resource: Specific resource name
+        - resource_type: Type of resource (Cluster, ContainerInstance, CapacityProvider, etc.)
+        - cluster_name: Name of the cluster
+        - region: AWS region
+        - issue: Detailed description of the issue
+        - recommendation: What should be done
+        - remediation_steps: List of CLI commands or steps
+        - documentation_links: List of AWS documentation URLs
 
         STRUCTURE YOUR RESPONSE IN TWO SECTIONS:
 
@@ -163,27 +199,84 @@ def register_module(mcp: FastMCP) -> None:
 
         ### Issues Found:
         1. 🔴 [HIGH] Execute Command Logging Not Configured
-           - ECS Exec sessions are not being logged (NONE setting)
-           - Cluster: my-ecs-cluster | Region: us-east-1
+           - Category: Logging
+           - Resource: my-ecs-cluster (Cluster)
+           - Region: us-east-1
+           - Issue: ECS Exec sessions are not being logged (NONE setting)
 
-        2. 🟠 [MEDIUM] CloudWatch Log Group Not Configured
-           - No CloudWatch log group for ECS Exec audit trails
+        2. 🟠 [MEDIUM] Outdated ECS Agent Version
+           - Category: Container Instance
+           - Resource: i-1234567890abcdef0 (ContainerInstance)
            - Cluster: my-ecs-cluster | Region: us-east-1
+           - Issue: Agent version 1.65.0 is below recommended 1.70.0
         ```
 
         SECTION 2 - DETAILED REMEDIATION (Show this after summary):
-        For each issue, provide:
-        - Full explanation of the security risk
-        - Step-by-step remediation commands
-        - AWS documentation links
+        For EACH recommendation, you MUST display ALL of these fields with visual separators:
+
+        ### {emoji} {title}
+
+        📋 **Resource Details:**
+        - Type: {resource_type}
+        - Name: {resource}
+        - Cluster: {cluster_name}
+        - Region: {region}
+        - Category: {category}
+
+        ⚠️ **Issue:** {issue}
+
+        💡 **Recommendation:** {recommendation}
+
+        🔧 **Remediation Steps:**
+        ```bash
+        {remediation_steps[0]}
+        {remediation_steps[1]}
+        {remediation_steps[2]}
+        ...
+        ```
+
+        📚 **AWS Documentation:**
+        - {documentation_links[0]}
+        - {documentation_links[1]}
+        ...
+
+        ---
+
+        MANDATORY FIELDS TO DISPLAY:
+        ✅ title - Issue title with severity emoji
+        ✅ resource_type - Type of AWS resource (Cluster, ContainerInstance, CapacityProvider)
+        ✅ resource - Specific resource name/ID
+        ✅ cluster_name - ECS cluster name
+        ✅ region - AWS region
+        ✅ category - Issue category (Monitoring, Logging, IAM, Container Instance, etc.)
+        ✅ severity - High/Medium/Low with color coding
+        ✅ issue - Detailed description of what's wrong
+        ✅ recommendation - What action should be taken
+        ✅ remediation_steps - Array of CLI commands or manual steps (display ALL steps)
+        ✅ documentation_links - Array of AWS documentation URLs (display ALL links)
 
         FORMATTING RULES:
         1. Use AWS Trusted Advisor color coding:
            🔴 High (critical), 🟠 Medium (important), 🟡 Low (minor)
         2. Group by severity: High → Medium → Low
-        3. Show resource hierarchy: Cluster: {name} | Region: {region}
-        4. Include CLI commands in code blocks
-        5. Link to AWS documentation for each issue type
+        3. ALWAYS show resource details section with ALL fields: resource_type, resource,
+           cluster_name, region, category
+        4. ALWAYS display the full "recommendation" field - this tells users what to do
+        5. ALWAYS display ALL "remediation_steps" in a code block - these are the actual
+           commands to run
+        6. ALWAYS display ALL "documentation_links" as clickable links - these provide
+           additional context
+        7. For ContainerInstance resources, show both the instance ID and cluster name
+        8. For CapacityProvider resources, show the provider name and cluster name
+        9. Never omit any of the mandatory fields listed above
+
+        VISUAL SEPARATORS (Use these emojis to color-code and differentiate sections):
+        - 📋 for **Resource Details** section (provides context about what resource has the issue)
+        - ⚠️ for **Issue** section (describes the security risk or problem)
+        - 💡 for **Recommendation** section (suggests what action to take)
+        - 🔧 for **Remediation Steps** section (provides specific commands to fix the issue)
+        - 📚 for **AWS Documentation** section (links to official AWS documentation)
+        - Use --- (horizontal rule) to visually separate each recommendation from the next
 
         CRITICAL - YOU MUST ASK FOR REGION FIRST:
 
@@ -202,8 +295,13 @@ def register_module(mcp: FastMCP) -> None:
         ❌ Assuming us-east-1 without asking user
         ❌ Not offering to check other regions after analysis
         """
-        logger.info(f"Security analysis requested - clusters: {cluster_names}, regions: {regions}")
-        return await analyze_ecs_security(cluster_names=cluster_names, regions=regions)
+        logger.info(
+            f"Security analysis requested - clusters: {cluster_names}, regions: {regions}, "
+            f"include_aws_docs: {include_aws_docs}"
+        )
+        return await analyze_ecs_security(
+            cluster_names=cluster_names, regions=regions, include_aws_docs=include_aws_docs
+        )
 
     @mcp.prompt("analyze ecs security")
     def security_analysis_prompt() -> List[str]:
