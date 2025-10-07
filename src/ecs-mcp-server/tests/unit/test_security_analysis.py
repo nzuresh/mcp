@@ -118,7 +118,7 @@ async def test_data_adapter_exception(mock_api):
 
 
 @pytest.mark.parametrize(
-    "cluster_data,expected_rec_count,expected_high,expected_medium",
+    "cluster_data,expected_rec_count,expected_high,expected_medium,expected_low",
     [
         (
             {
@@ -127,10 +127,11 @@ async def test_data_adapter_exception(mock_api):
                 "settings": [],
                 "configuration": {"executeCommandConfiguration": {"logging": "NONE"}},
             },
+            5,
+            1,
             3,
             1,
-            2,
-        ),  # No insights, no logging, no log group
+        ),  # No insights, no logging, no log group, IAM exec check, IAM general review
         (
             {
                 "clusterName": "test",
@@ -138,14 +139,15 @@ async def test_data_adapter_exception(mock_api):
                 "settings": [],
                 "configuration": {"executeCommandConfiguration": {"logging": "DEFAULT"}},
             },
+            6,
+            1,
             4,
             1,
-            3,
-        ),  # Inactive + no insights + default logging + no log group
+        ),  # Inactive + no insights + default logging + no log group + IAM checks
     ],
 )
 def test_security_analyzer_recommendations(
-    cluster_data, expected_rec_count, expected_high, expected_medium
+    cluster_data, expected_rec_count, expected_high, expected_medium, expected_low
 ):
     """Test SecurityAnalyzer generates correct recommendations."""
     analyzer = SecurityAnalyzer("test", "us-east-1")
@@ -155,16 +157,23 @@ def test_security_analyzer_recommendations(
     assert len(result["recommendations"]) == expected_rec_count
     assert result["summary"]["by_severity"]["High"] == expected_high
     assert result["summary"]["by_severity"]["Medium"] == expected_medium
+    assert result["summary"]["by_severity"]["Low"] == expected_low
 
 
 def test_security_analyzer_secure_cluster(secure_cluster):
-    """Test that secure cluster generates no recommendations."""
+    """Test that secure cluster generates only IAM recommendations."""
     analyzer = SecurityAnalyzer("secure", "us-east-1")
     result = analyzer.analyze({"cluster": secure_cluster})
 
     assert result["status"] == "success"
-    assert len(result["recommendations"]) == 0
-    assert result["summary"]["total_issues"] == 0
+    # Secure cluster should only have IAM recommendations (exec check + general review)
+    assert len(result["recommendations"]) == 2
+    assert result["summary"]["total_issues"] == 2
+    # All recommendations should be IAM-related
+    assert all(r["category"] == "IAM" for r in result["recommendations"])
+    # Should have 1 Medium (exec check) and 1 Low (general review)
+    assert result["summary"]["by_severity"]["Medium"] == 1
+    assert result["summary"]["by_severity"]["Low"] == 1
 
 
 def test_security_analyzer_error_handling():
@@ -403,6 +412,225 @@ async def test_default_region(mock_api, secure_cluster):
     result = await analyze_ecs_security(cluster_names=["test"], regions=None)
 
     assert result["results"][0]["region"] == "us-east-1"
+
+
+# ----------------------------------------------------------------------------
+# IAM Security Tests
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "exec_config,capacity_providers,expected_iam_recs",
+    [
+        # ECS Exec configured - should generate IAM recommendation
+        ({"logging": "OVERRIDE"}, [], 2),  # Exec config + general review
+        # Capacity providers configured - should generate IAM recommendation
+        ({}, ["arn:aws:ecs:us-east-1:123:capacity-provider/cp1"], 2),  # CP + general review
+        # Both configured - should generate both IAM recommendations
+        (
+            {"logging": "OVERRIDE"},
+            ["arn:aws:ecs:us-east-1:123:capacity-provider/cp1"],
+            3,
+        ),  # Exec + CP + general
+        # Neither configured - should only generate general review
+        ({}, [], 1),  # Only general review
+    ],
+)
+def test_cluster_iam_security_checks(exec_config, capacity_providers, expected_iam_recs):
+    """Test cluster IAM security checks for various configurations."""
+    cluster = {
+        "clusterName": "test-cluster",
+        "clusterArn": "arn:aws:ecs:us-east-1:123456789012:cluster/test-cluster",
+        "status": "ACTIVE",
+        "settings": [{"name": "containerInsights", "value": "enabled"}],
+        "configuration": {"executeCommandConfiguration": exec_config} if exec_config else {},
+        "capacityProviders": capacity_providers,
+    }
+
+    analyzer = SecurityAnalyzer("test-cluster", "us-east-1")
+    result = analyzer.analyze({"cluster": cluster})
+
+    # Filter IAM-related recommendations
+    iam_recs = [r for r in result["recommendations"] if r["category"] == "IAM"]
+
+    assert len(iam_recs) == expected_iam_recs
+    assert result["status"] == "success"
+
+
+def test_iam_service_linked_role_exec_recommendation():
+    """Test IAM recommendation for ECS Exec service-linked role."""
+    cluster = {
+        "clusterName": "exec-cluster",
+        "clusterArn": "arn:aws:ecs:us-east-1:123456789012:cluster/exec-cluster",
+        "status": "ACTIVE",
+        "settings": [{"name": "containerInsights", "value": "enabled"}],
+        "configuration": {
+            "executeCommandConfiguration": {
+                "logging": "OVERRIDE",
+                "logConfiguration": {"cloudWatchLogGroupName": "/aws/ecs/exec-cluster/exec"},
+            }
+        },
+        "capacityProviders": [],
+    }
+
+    analyzer = SecurityAnalyzer("exec-cluster", "us-east-1")
+    result = analyzer.analyze({"cluster": cluster})
+
+    # Find the ECS Exec service-linked role recommendation
+    exec_iam_recs = [
+        r for r in result["recommendations"] if r["category"] == "IAM" and "ECS Exec" in r["issue"]
+    ]
+
+    assert len(exec_iam_recs) == 1
+    rec = exec_iam_recs[0]
+
+    # Verify recommendation structure
+    assert rec["severity"] == "Medium"
+    assert rec["resource"] == "exec-cluster"
+    assert "AWSServiceRoleForECS" in rec["issue"]
+    assert "service-linked role" in rec["issue"].lower()
+
+    # Verify remediation steps include IAM commands
+    assert any("aws iam get-role" in step for step in rec["remediation_steps"])
+    assert any("create-service-linked-role" in step for step in rec["remediation_steps"])
+
+    # Verify documentation links
+    assert len(rec["documentation_links"]) > 0
+    assert any("service-linked-roles" in link for link in rec["documentation_links"])
+
+
+def test_iam_service_linked_role_capacity_provider_recommendation():
+    """Test IAM recommendation for capacity provider service-linked role."""
+    cluster = {
+        "clusterName": "cp-cluster",
+        "clusterArn": "arn:aws:ecs:us-east-1:123456789012:cluster/cp-cluster",
+        "status": "ACTIVE",
+        "settings": [{"name": "containerInsights", "value": "enabled"}],
+        "configuration": {},
+        "capacityProviders": [
+            "arn:aws:ecs:us-east-1:123456789012:capacity-provider/my-cp",
+            "arn:aws:ecs:us-east-1:123456789012:capacity-provider/my-cp-2",
+        ],
+    }
+
+    analyzer = SecurityAnalyzer("cp-cluster", "us-east-1")
+    result = analyzer.analyze({"cluster": cluster})
+
+    # Find the capacity provider service-linked role recommendation
+    cp_iam_recs = [
+        r
+        for r in result["recommendations"]
+        if r["category"] == "IAM" and "Capacity Providers" in r["title"]
+    ]
+
+    assert len(cp_iam_recs) == 1
+    rec = cp_iam_recs[0]
+
+    # Verify recommendation structure
+    assert rec["severity"] == "Medium"
+    assert rec["resource"] == "cp-cluster"
+    assert "capacity providers" in rec["issue"].lower()
+    assert "AWSServiceRoleForECS" in rec["issue"]
+
+    # Verify remediation steps include Auto Scaling permissions
+    remediation_text = " ".join(rec["remediation_steps"])
+    assert "autoscaling" in remediation_text.lower()
+
+    # Verify documentation links
+    assert len(rec["documentation_links"]) > 0
+    assert any("capacity-providers" in link for link in rec["documentation_links"])
+
+
+def test_iam_general_review_recommendation():
+    """Test general IAM review recommendation is always generated."""
+    cluster = {
+        "clusterName": "minimal-cluster",
+        "clusterArn": "arn:aws:ecs:us-east-1:123456789012:cluster/minimal-cluster",
+        "status": "ACTIVE",
+        "settings": [{"name": "containerInsights", "value": "enabled"}],
+        "configuration": {},
+        "capacityProviders": [],
+    }
+
+    analyzer = SecurityAnalyzer("minimal-cluster", "us-east-1")
+    result = analyzer.analyze({"cluster": cluster})
+
+    # Find the general IAM review recommendation
+    review_recs = [
+        r for r in result["recommendations"] if r["category"] == "IAM" and "Review" in r["title"]
+    ]
+
+    assert len(review_recs) == 1
+    rec = review_recs[0]
+
+    # Verify recommendation structure
+    assert rec["severity"] == "Low"
+    assert rec["resource"] == "minimal-cluster"
+    assert "least privilege" in rec["issue"].lower()
+
+    # Verify remediation steps include IAM best practices
+    remediation_text = " ".join(rec["remediation_steps"])
+    assert "aws iam" in remediation_text.lower()
+    assert "list-services" in remediation_text.lower()
+
+    # Verify documentation links include IAM best practices
+    assert len(rec["documentation_links"]) > 0
+    assert any("best-practices" in link for link in rec["documentation_links"])
+
+
+def test_iam_recommendations_have_required_fields():
+    """Test all IAM recommendations have required fields."""
+    cluster = {
+        "clusterName": "test",
+        "clusterArn": "arn:aws:ecs:us-east-1:123456789012:cluster/test",
+        "status": "ACTIVE",
+        "settings": [{"name": "containerInsights", "value": "enabled"}],
+        "configuration": {"executeCommandConfiguration": {"logging": "OVERRIDE"}},
+        "capacityProviders": ["arn:aws:ecs:us-east-1:123:capacity-provider/cp1"],
+    }
+
+    analyzer = SecurityAnalyzer("test", "us-east-1")
+    result = analyzer.analyze({"cluster": cluster})
+
+    iam_recs = [r for r in result["recommendations"] if r["category"] == "IAM"]
+
+    required_fields = [
+        "title",
+        "severity",
+        "category",
+        "resource",
+        "issue",
+        "recommendation",
+        "remediation_steps",
+        "documentation_links",
+    ]
+
+    for rec in iam_recs:
+        for field in required_fields:
+            assert field in rec, f"Missing field {field} in IAM recommendation"
+        assert isinstance(rec["remediation_steps"], list)
+        assert len(rec["remediation_steps"]) > 0
+        assert isinstance(rec["documentation_links"], list)
+        assert len(rec["documentation_links"]) > 0
+
+
+def test_iam_summary_includes_iam_category():
+    """Test that summary includes IAM category when IAM recommendations exist."""
+    cluster = {
+        "clusterName": "test",
+        "clusterArn": "arn:aws:ecs:us-east-1:123456789012:cluster/test",
+        "status": "ACTIVE",
+        "settings": [{"name": "containerInsights", "value": "enabled"}],
+        "configuration": {"executeCommandConfiguration": {"logging": "OVERRIDE"}},
+        "capacityProviders": [],
+    }
+
+    analyzer = SecurityAnalyzer("test", "us-east-1")
+    result = analyzer.analyze({"cluster": cluster})
+
+    # Verify IAM category is in summary
+    assert "IAM" in result["summary"]["by_category"]
+    assert result["summary"]["by_category"]["IAM"] >= 1
 
 
 # ----------------------------------------------------------------------------

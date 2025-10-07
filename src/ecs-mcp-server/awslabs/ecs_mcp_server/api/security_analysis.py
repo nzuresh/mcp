@@ -377,6 +377,7 @@ class SecurityAnalyzer:
         # Run security checks (will be implemented in subsequent subtasks)
         self._analyze_cluster_security(cluster_data)
         self._analyze_logging_security(cluster_data)
+        self._analyze_cluster_iam_security(cluster_data)
         self._analyze_enhanced_cluster_security(container_instances)
         self._analyze_capacity_providers(capacity_providers)
 
@@ -875,6 +876,155 @@ class SecurityAnalyzer:
                     "encrypt-log-data-kms.html"
                 ],
             )
+
+    def _analyze_cluster_iam_security(self, cluster: Dict[str, Any]) -> None:
+        """
+        Analyze cluster-level IAM security configurations.
+
+        Checks:
+        - Service-linked role existence and configuration
+        - Cluster-level IAM permissions
+
+        Args:
+            cluster: Cluster data dictionary
+        """
+        cluster_name = cluster.get("clusterName", "unknown")
+
+        # Check for ECS service-linked role
+        # The service-linked role is automatically created when you use ECS,
+        # but we should verify it exists and recommend checking its configuration
+        # Note: We can't directly query IAM from the cluster data, but we can
+        # provide guidance on verifying the service-linked role exists
+
+        # Check if cluster has any configuration that would require service-linked role
+        # Service-linked roles are required for:
+        # - ECS service discovery
+        # - ECS Exec
+        # - Load balancer integration
+        # - Auto Scaling
+
+        configuration = cluster.get("configuration", {})
+        exec_config = configuration.get("executeCommandConfiguration", {})
+
+        # If ECS Exec is configured, service-linked role is critical
+        if exec_config:
+            self._add_recommendation(
+                title="🟡 Verify ECS Service-Linked Role Configuration",
+                severity="Medium",
+                category="IAM",
+                resource=cluster_name,
+                issue=(
+                    f"Cluster {cluster_name} has ECS Exec configured, which requires the "
+                    "AWSServiceRoleForECS service-linked role. While this role is typically "
+                    "created automatically, it's important to verify it exists and has the "
+                    "correct permissions."
+                ),
+                recommendation=(
+                    "Verify that the AWSServiceRoleForECS service-linked role exists in your "
+                    "account and has the necessary permissions. This role is required for ECS "
+                    "to manage resources on your behalf, including ECS Exec, service discovery, "
+                    "and load balancer integration."
+                ),
+                remediation_steps=[
+                    "# Check if the service-linked role exists:",
+                    "aws iam get-role --role-name AWSServiceRoleForECS",
+                    "",
+                    "# If the role doesn't exist, create it:",
+                    "aws iam create-service-linked-role --aws-service-name ecs.amazonaws.com",
+                    "",
+                    "# Verify the role has the correct managed policy attached:",
+                    "aws iam list-attached-role-policies --role-name AWSServiceRoleForECS",
+                    "# Expected policy: AmazonECSServiceRolePolicy",
+                    "",
+                    "# Review the role's trust relationship:",
+                    (
+                        "aws iam get-role --role-name AWSServiceRoleForECS "
+                        "--query 'Role.AssumeRolePolicyDocument'"
+                    ),
+                ],
+                documentation_links=[
+                    "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/"
+                    "using-service-linked-roles.html",
+                    "https://docs.aws.amazon.com/IAM/latest/UserGuide/"
+                    "using-service-linked-roles.html",
+                ],
+            )
+
+        # Check for capacity providers which also require service-linked role
+        capacity_provider_arns = cluster.get("capacityProviders", [])
+        if capacity_provider_arns:
+            self._add_recommendation(
+                title="🟡 Verify Service-Linked Role for Capacity Providers",
+                severity="Medium",
+                category="IAM",
+                resource=cluster_name,
+                issue=(
+                    f"Cluster {cluster_name} uses capacity providers, which require the "
+                    "AWSServiceRoleForECS service-linked role for Auto Scaling integration. "
+                    "Ensure this role exists and has proper permissions."
+                ),
+                recommendation=(
+                    "Verify the service-linked role exists and can manage Auto Scaling groups "
+                    "on behalf of ECS. Without proper permissions, capacity providers may fail "
+                    "to scale your cluster."
+                ),
+                remediation_steps=[
+                    "# Verify service-linked role exists:",
+                    "aws iam get-role --role-name AWSServiceRoleForECS",
+                    "",
+                    "# Check the role can access Auto Scaling:",
+                    "aws iam list-attached-role-policies --role-name AWSServiceRoleForECS",
+                    "",
+                    "# If using custom capacity providers, verify additional permissions:",
+                    "# - autoscaling:CreateAutoScalingGroup",
+                    "# - autoscaling:UpdateAutoScalingGroup",
+                    "# - autoscaling:DeleteAutoScalingGroup",
+                    "# - autoscaling:DescribeAutoScalingGroups",
+                ],
+                documentation_links=[
+                    "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/"
+                    "using-service-linked-roles.html",
+                    "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/"
+                    "asg-capacity-providers.html#asg-capacity-providers-iam",
+                ],
+            )
+
+        # Provide general IAM best practices recommendation
+        self._add_recommendation(
+            title="🟢 Review Cluster IAM Configuration",
+            severity="Low",
+            category="IAM",
+            resource=cluster_name,
+            issue=(
+                "Regular review of IAM configurations is a security best practice. "
+                "Ensure that all IAM roles and policies follow the principle of least privilege."
+            ),
+            recommendation=(
+                "Periodically review IAM roles and policies associated with this cluster, "
+                "including service-linked roles, task roles, and execution roles. Remove any "
+                "unnecessary permissions and ensure compliance with your organization's "
+                "security policies."
+            ),
+            remediation_steps=[
+                "# Review service-linked role:",
+                "aws iam get-role --role-name AWSServiceRoleForECS",
+                "",
+                "# List all roles used by tasks in this cluster:",
+                f"aws ecs list-services --cluster {cluster_name}",
+                "# Then describe each service to see task and execution roles",
+                "",
+                "# Use IAM Access Analyzer to identify unused permissions:",
+                "aws accessanalyzer list-analyzers",
+                "",
+                "# Review IAM policy simulator for specific permissions:",
+                "# https://policysim.aws.amazon.com/",
+            ],
+            documentation_links=[
+                "https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html",
+                "https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html",
+                "https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-getting-started.html",
+            ],
+        )
 
     def _generate_summary(self) -> Dict[str, Any]:
         """

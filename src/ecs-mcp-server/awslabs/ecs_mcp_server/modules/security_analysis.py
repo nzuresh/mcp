@@ -114,6 +114,12 @@ def register_module(mcp: FastMCP) -> None:
         - CloudWatch logging configuration
         - Log encryption settings
 
+        IAM Security:
+        - Service-linked role validation for ECS operations
+        - Service-linked role verification for capacity providers
+        - IAM configuration review recommendations
+        - Least privilege access validation
+
         Container Instance Security:
         - ECS agent version validation (flags versions below 1.70.0)
         - Agent connectivity status and instance health
