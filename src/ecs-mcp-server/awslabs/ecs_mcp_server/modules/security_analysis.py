@@ -1,0 +1,155 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+Security Analysis module for ECS MCP Server.
+This module provides tools and prompts for analyzing ECS security configurations.
+"""
+
+import logging
+
+from fastmcp import FastMCP
+from pydantic import Field
+
+from awslabs.ecs_mcp_server.api.security_analysis import (
+    format_cluster_list,
+    get_target_region,
+    list_clusters_in_region,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def register_module(mcp: FastMCP) -> None:
+    """Register security analysis module tools and prompts with the MCP server."""
+
+    # Define pydantic Field descriptions for all parameters
+    region_field = Field(
+        default=None,
+        description=(
+            "Optional AWS region to analyze. "
+            "If not provided, uses the AWS_REGION environment variable (defaults to 'us-east-1'). "
+            "Must be a valid AWS region where ECS is available. "
+            "Example: 'us-west-2', 'eu-west-1'"
+        ),
+    )
+
+    @mcp.tool(name="analyze_ecs_security", annotations=None)
+    async def mcp_analyze_ecs_security(
+        region: str | None = region_field,
+    ) -> str:
+        """
+        List ECS clusters available for security analysis.
+
+        This tool lists all ECS clusters in the specified AWS region, providing
+        an overview of available clusters that can be analyzed for security issues.
+
+        Interactive Workflow:
+
+        Step 1: List Available Clusters
+           - Call with NO parameters to list clusters in default region
+           - Call with region parameter to list clusters in specific region
+           - Returns formatted list of available clusters with metadata
+
+        Step 2: User Selects Clusters (Future)
+           - User reviews the list and selects which clusters to analyze
+           - Future versions will support cluster_names parameter for analysis
+
+        Usage Examples:
+
+        Example 1 - List clusters in default region:
+            analyze_ecs_security()
+            # Returns list of clusters in AWS_REGION for selection
+
+        Example 2 - List clusters in specific region:
+            analyze_ecs_security(region="us-west-2")
+            # Returns list of clusters in us-west-2 for selection
+
+        Cluster Information Provided:
+        - Cluster name and ARN
+        - Current status (ACTIVE, INACTIVE, etc.)
+        - Running tasks count
+        - Active services count
+        - Registered container instances count
+        - Resource tags
+
+        Parameters:
+            region: Optional AWS region. If None, uses AWS_REGION environment variable.
+
+        Returns:
+            Formatted list of available clusters for selection
+
+        Error Handling:
+            - Invalid region: Returns error message with list of valid regions
+            - No clusters found: Returns helpful message with cluster creation guidance
+        """
+        try:
+            # Step 1: Determine target region
+            logger.info("Step 1: Determining target region")
+            target_region = get_target_region(region)
+
+            # Step 2: List clusters for user selection
+            logger.info(f"Step 2: Listing clusters in region '{target_region}' for user selection")
+            clusters = await list_clusters_in_region(target_region)
+            return format_cluster_list(clusters, target_region)
+
+        except Exception as e:
+            import traceback
+
+            error_msg = f"Error during security analysis: {str(e)}"
+            logger.error(error_msg)
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return f"❌ {error_msg}\n\nDetailed error:\n{traceback.format_exc()}"
+
+    # Register prompt patterns for security analysis
+
+    @mcp.prompt("analyze ecs security")
+    def analyze_ecs_security_prompt():
+        """User wants to analyze ECS security"""
+        return ["analyze_ecs_security"]
+
+    @mcp.prompt("check ecs security")
+    def check_ecs_security_prompt():
+        """User wants to check ECS security"""
+        return ["analyze_ecs_security"]
+
+    @mcp.prompt("ecs security audit")
+    def ecs_security_audit_prompt():
+        """User wants to perform an ECS security audit"""
+        return ["analyze_ecs_security"]
+
+    @mcp.prompt("security best practices")
+    def security_best_practices_prompt():
+        """User wants to check security best practices"""
+        return ["analyze_ecs_security"]
+
+    @mcp.prompt("security recommendations")
+    def security_recommendations_prompt():
+        """User wants security recommendations"""
+        return ["analyze_ecs_security"]
+
+    @mcp.prompt("scan ecs clusters")
+    def scan_ecs_clusters_prompt():
+        """User wants to scan ECS clusters for security issues"""
+        return ["analyze_ecs_security"]
+
+    @mcp.prompt("ecs security scan")
+    def ecs_security_scan_prompt():
+        """User wants to perform an ECS security scan"""
+        return ["analyze_ecs_security"]
+
+    @mcp.prompt("list ecs clusters")
+    def list_ecs_clusters_prompt():
+        """User wants to list ECS clusters"""
+        return ["analyze_ecs_security"]
