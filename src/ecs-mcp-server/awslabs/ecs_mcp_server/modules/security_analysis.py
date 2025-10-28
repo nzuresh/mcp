@@ -20,12 +20,11 @@ This module provides tools and prompts for analyzing ECS security configurations
 import logging
 
 from fastmcp import FastMCP
-from pydantic import Field
 
 from awslabs.ecs_mcp_server.api.security_analysis import (
-    format_cluster_list,
+    format_clusters_for_display,
+    get_clusters_with_metadata,
     get_target_region,
-    list_clusters_in_region,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,47 +33,32 @@ logger = logging.getLogger(__name__)
 def register_module(mcp: FastMCP) -> None:
     """Register security analysis module tools and prompts with the MCP server."""
 
-    # Define pydantic Field descriptions for all parameters
-    region_field = Field(
-        default=None,
-        description=(
-            "Optional AWS region to analyze. "
-            "If not provided, uses the AWS_REGION environment variable (defaults to 'us-east-1'). "
-            "Must be a valid AWS region where ECS is available. "
-            "Example: 'us-west-2', 'eu-west-1'"
-        ),
-    )
-
     @mcp.tool(name="analyze_ecs_security", annotations=None)
-    async def mcp_analyze_ecs_security(
-        region: str | None = region_field,
-    ) -> str:
+    async def mcp_analyze_ecs_security() -> str:
         """
         List ECS clusters available for security analysis.
 
-        This tool lists all ECS clusters in the specified AWS region, providing
+        The region is determined from the AWS_REGION environment variable (defaults to 'us-east-1').
+
+        This tool lists all ECS clusters in the configured AWS region, providing
         an overview of available clusters that can be analyzed for security issues.
 
         Interactive Workflow:
 
+        Workflow:
+
         Step 1: List Available Clusters
-           - Call with NO parameters to list clusters in default region
-           - Call with region parameter to list clusters in specific region
+           - Call with NO parameters to list clusters in configured region
            - Returns formatted list of available clusters with metadata
+           - User reviews the list to see what clusters are available
 
-        Step 2: User Selects Clusters (Future)
-           - User reviews the list and selects which clusters to analyze
-           - Future versions will support cluster_names parameter for analysis
+        Note: Future versions will support cluster_names parameter for detailed analysis
 
-        Usage Examples:
+        Usage Example:
 
-        Example 1 - List clusters in default region:
+        Example - List clusters in configured region:
             analyze_ecs_security()
             # Returns list of clusters in AWS_REGION for selection
-
-        Example 2 - List clusters in specific region:
-            analyze_ecs_security(region="us-west-2")
-            # Returns list of clusters in us-west-2 for selection
 
         Cluster Information Provided:
         - Cluster name and ARN
@@ -84,25 +68,21 @@ def register_module(mcp: FastMCP) -> None:
         - Registered container instances count
         - Resource tags
 
-        Parameters:
-            region: Optional AWS region. If None, uses AWS_REGION environment variable.
-
         Returns:
             Formatted list of available clusters for selection
 
         Error Handling:
-            - Invalid region: Returns error message with list of valid regions
             - No clusters found: Returns helpful message with cluster creation guidance
         """
         try:
-            # Step 1: Determine target region
-            logger.info("Step 1: Determining target region")
-            target_region = get_target_region(region)
+            # Step 1: Get target region from environment
+            logger.info("Step 1: Getting target region from environment")
+            target_region = get_target_region()
 
             # Step 2: List clusters for user selection
             logger.info(f"Step 2: Listing clusters in region '{target_region}' for user selection")
-            clusters = await list_clusters_in_region(target_region)
-            return format_cluster_list(clusters, target_region)
+            clusters = await get_clusters_with_metadata(target_region)
+            return format_clusters_for_display(clusters, target_region)
 
         except Exception as e:
             import traceback

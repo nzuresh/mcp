@@ -26,8 +26,8 @@ def test_module_registration():
 
 @pytest.mark.anyio
 @patch("awslabs.ecs_mcp_server.modules.security_analysis.get_target_region")
-@patch("awslabs.ecs_mcp_server.modules.security_analysis.list_clusters_in_region")
-@patch("awslabs.ecs_mcp_server.modules.security_analysis.format_cluster_list")
+@patch("awslabs.ecs_mcp_server.modules.security_analysis.get_clusters_with_metadata")
+@patch("awslabs.ecs_mcp_server.modules.security_analysis.format_clusters_for_display")
 async def test_tool_execution_list_clusters(mock_format, mock_list_clusters, mock_get_region):
     """Test tool execution for listing clusters."""
     from awslabs.ecs_mcp_server.modules import security_analysis
@@ -64,11 +64,11 @@ async def test_tool_execution_list_clusters(mock_format, mock_list_clusters, moc
     security_analysis.register_module(mock_mcp)
 
     # Execute the tool
-    result = await registered_tool(region="us-east-1")
+    result = await registered_tool()
 
     # Verify the result
     assert result == "Formatted cluster list"
-    mock_get_region.assert_called_once_with("us-east-1")
+    mock_get_region.assert_called_once()
     mock_list_clusters.assert_called_once_with("us-east-1")
     mock_format.assert_called_once()
 
@@ -102,7 +102,7 @@ async def test_tool_execution_error_handling(mock_get_region):
     security_analysis.register_module(mock_mcp)
 
     # Execute the tool
-    result = await registered_tool(region="us-east-1")
+    result = await registered_tool()
 
     # Verify error message is returned
     assert "❌" in result

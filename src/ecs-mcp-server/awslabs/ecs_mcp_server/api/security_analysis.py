@@ -23,88 +23,35 @@ import logging
 import os
 from typing import Any, Dict
 
-import boto3
-
 from awslabs.ecs_mcp_server.api.resource_management import ecs_api_operation
 
 logger = logging.getLogger(__name__)
 
 
-class RegionValidationError(Exception):
-    """Raised when an invalid AWS region is provided."""
-
-    pass
-
-
-def validate_region(region: str) -> None:
+def get_target_region() -> str:
     """
-    Validate that the provided region is a valid AWS region for ECS.
-
-    Args:
-        region: AWS region name to validate
-
-    Raises:
-        RegionValidationError: If the region is not valid for ECS
-    """
-    try:
-        # Get list of available regions for ECS service
-        available_regions = boto3.Session().get_available_regions("ecs")
-
-        if region not in available_regions:
-            regions_list = ", ".join(sorted(available_regions))
-            raise RegionValidationError(
-                f"Invalid AWS region '{region}'. Must be one of: {regions_list}"
-            )
-
-        logger.info(f"Region '{region}' validated successfully")
-    except Exception as e:
-        if isinstance(e, RegionValidationError):
-            raise
-        logger.error(f"Error validating region '{region}': {e}")
-        raise RegionValidationError(f"Failed to validate region '{region}': {str(e)}") from e
-
-
-def get_target_region(region: str | None = None) -> str:
-    """
-    Get the target AWS region for security analysis.
-
-    If region is provided, validates it and returns it.
-    If region is None, uses AWS_REGION environment variable (defaults to 'us-east-1').
-
-    Args:
-        region: Optional AWS region name
+    Get the target AWS region for security analysis from environment variable.
 
     Returns:
-        Validated AWS region name
-
-    Raises:
-        RegionValidationError: If the region is invalid
+        AWS region name from AWS_REGION environment variable (defaults to 'us-east-1')
     """
-    if region is None:
-        # Get region from environment variable, default to us-east-1
-        region = os.environ.get("AWS_REGION", "us-east-1")
-        logger.info(f"No region specified, using region from environment: {region}")
-    else:
-        logger.info(f"Using specified region: {region}")
-
-    # Validate the region
-    validate_region(region)
-
+    region = os.environ.get("AWS_REGION", "us-east-1")
+    logger.info(f"Using region from environment: {region}")
     return region
 
 
-async def list_clusters_in_region(region: str) -> list[Dict[str, Any]]:
+async def get_clusters_with_metadata(region: str) -> list[Dict[str, Any]]:
     """
-    List all ECS clusters in the specified region with their metadata.
+    Get all ECS clusters in the specified region with their metadata.
 
     Args:
-        region: AWS region to list clusters from
+        region: AWS region to get clusters from
 
     Returns:
         List of cluster dictionaries with metadata
 
     Raises:
-        Exception: If listing clusters fails
+        Exception: If retrieving clusters fails
     """
     logger.info(f"Listing ECS clusters in region: {region}")
 
@@ -152,20 +99,20 @@ async def list_clusters_in_region(region: str) -> list[Dict[str, Any]]:
         return all_clusters
 
     except Exception as e:
-        logger.error(f"Error listing clusters in region {region}: {e}")
-        raise Exception(f"Failed to list clusters in region '{region}': {str(e)}") from e
+        logger.error(f"Error retrieving clusters in region {region}: {e}")
+        raise Exception(f"Failed to retrieve clusters in region '{region}': {str(e)}") from e
 
 
-def format_cluster_list(clusters: list[Dict[str, Any]], region: str) -> str:
+def format_clusters_for_display(clusters: list[Dict[str, Any]], region: str) -> str:
     """
-    Format a list of clusters for user selection.
+    Format cluster data into a user-friendly display string.
 
     Args:
         clusters: List of cluster dictionaries
         region: AWS region name
 
     Returns:
-        Formatted string with cluster information
+        Formatted string with cluster information for display
     """
     if not clusters:
         return f"""

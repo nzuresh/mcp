@@ -7,64 +7,32 @@ from unittest.mock import patch
 import pytest
 
 from awslabs.ecs_mcp_server.api.security_analysis import (
-    RegionValidationError,
-    format_cluster_list,
+    format_clusters_for_display,
+    get_clusters_with_metadata,
     get_target_region,
-    list_clusters_in_region,
-    validate_region,
 )
 
 
-def test_validate_region_valid():
-    """Test validate_region with a valid region."""
-    # Should not raise an exception
-    validate_region("us-east-1")
-    validate_region("us-west-2")
-    validate_region("eu-west-1")
-
-
-def test_validate_region_invalid():
-    """Test validate_region with an invalid region."""
-    with pytest.raises(RegionValidationError) as exc_info:
-        validate_region("invalid-region")
-
-    assert "Invalid AWS region" in str(exc_info.value)
-    assert "invalid-region" in str(exc_info.value)
-
-
-@patch("awslabs.ecs_mcp_server.api.security_analysis.validate_region")
-def test_get_target_region_with_parameter(mock_validate):
-    """Test get_target_region when region parameter is provided."""
-    result = get_target_region("us-west-2")
-
-    assert result == "us-west-2"
-    mock_validate.assert_called_once_with("us-west-2")
-
-
-@patch("awslabs.ecs_mcp_server.api.security_analysis.validate_region")
 @patch.dict("os.environ", {"AWS_REGION": "eu-central-1"})
-def test_get_target_region_from_env(mock_validate):
+def test_get_target_region_from_env():
     """Test get_target_region when using environment variable."""
-    result = get_target_region(None)
+    result = get_target_region()
 
     assert result == "eu-central-1"
-    mock_validate.assert_called_once_with("eu-central-1")
 
 
-@patch("awslabs.ecs_mcp_server.api.security_analysis.validate_region")
 @patch.dict("os.environ", {}, clear=True)
-def test_get_target_region_default(mock_validate):
+def test_get_target_region_default():
     """Test get_target_region when no region specified and no env var."""
-    result = get_target_region(None)
+    result = get_target_region()
 
     assert result == "us-east-1"
-    mock_validate.assert_called_once_with("us-east-1")
 
 
 @pytest.mark.anyio
 @patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
-async def test_list_clusters_in_region_success(mock_ecs_api):
-    """Test list_clusters_in_region with successful response."""
+async def test_get_clusters_with_metadata_success(mock_ecs_api):
+    """Test get_clusters_with_metadata with successful response."""
     # Mock ListClusters response
     mock_ecs_api.side_effect = [
         {
@@ -99,7 +67,7 @@ async def test_list_clusters_in_region_success(mock_ecs_api):
         },
     ]
 
-    result = await list_clusters_in_region("us-east-1")
+    result = await get_clusters_with_metadata("us-east-1")
 
     assert len(result) == 2
     assert result[0]["cluster_name"] == "test-cluster-1"
@@ -111,11 +79,11 @@ async def test_list_clusters_in_region_success(mock_ecs_api):
 
 @pytest.mark.anyio
 @patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
-async def test_list_clusters_in_region_empty(mock_ecs_api):
-    """Test list_clusters_in_region when no clusters exist."""
+async def test_get_clusters_with_metadata_empty(mock_ecs_api):
+    """Test get_clusters_with_metadata when no clusters exist."""
     mock_ecs_api.return_value = {"clusterArns": []}
 
-    result = await list_clusters_in_region("us-east-1")
+    result = await get_clusters_with_metadata("us-east-1")
 
     assert result == []
     mock_ecs_api.assert_called_once()
@@ -123,18 +91,18 @@ async def test_list_clusters_in_region_empty(mock_ecs_api):
 
 @pytest.mark.anyio
 @patch("awslabs.ecs_mcp_server.api.security_analysis.ecs_api_operation")
-async def test_list_clusters_in_region_error(mock_ecs_api):
-    """Test list_clusters_in_region when API call fails."""
+async def test_get_clusters_with_metadata_error(mock_ecs_api):
+    """Test get_clusters_with_metadata when API call fails."""
     mock_ecs_api.side_effect = Exception("API Error")
 
     with pytest.raises(Exception) as exc_info:
-        await list_clusters_in_region("us-east-1")
+        await get_clusters_with_metadata("us-east-1")
 
-    assert "Failed to list clusters" in str(exc_info.value)
+    assert "Failed to retrieve clusters" in str(exc_info.value)
 
 
-def test_format_cluster_list_with_clusters():
-    """Test format_cluster_list with multiple clusters."""
+def test_format_clusters_for_display_with_clusters():
+    """Test format_clusters_for_display with multiple clusters."""
     clusters = [
         {
             "cluster_name": "prod-cluster",
@@ -150,7 +118,7 @@ def test_format_cluster_list_with_clusters():
         },
     ]
 
-    result = format_cluster_list(clusters, "us-east-1")
+    result = format_clusters_for_display(clusters, "us-east-1")
 
     assert "ECS CLUSTERS IN REGION: us-east-1" in result
     assert "Found 2 cluster(s)" in result
@@ -160,9 +128,9 @@ def test_format_cluster_list_with_clusters():
     assert "Active Services: 5" in result
 
 
-def test_format_cluster_list_empty():
-    """Test format_cluster_list with no clusters."""
-    result = format_cluster_list([], "us-west-2")
+def test_format_clusters_for_display_empty():
+    """Test format_clusters_for_display with no clusters."""
+    result = format_clusters_for_display([], "us-west-2")
 
     assert "No ECS clusters found in region: us-west-2" in result
     assert "create-cluster" in result
