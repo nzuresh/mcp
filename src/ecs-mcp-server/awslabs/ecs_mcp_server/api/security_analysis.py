@@ -23,29 +23,16 @@ import logging
 import os
 from typing import Any, Dict
 
-from awslabs.ecs_mcp_server.api.resource_management import ecs_api_operation
+from awslabs.ecs_mcp_server.utils.aws import get_aws_client
 
 logger = logging.getLogger(__name__)
 
 
-def get_target_region() -> str:
+async def get_clusters_with_metadata() -> list[Dict[str, Any]]:
     """
-    Get the target AWS region for security analysis from environment variable.
+    Get all ECS clusters with their metadata.
 
-    Returns:
-        AWS region name from AWS_REGION environment variable (defaults to 'us-east-1')
-    """
-    region = os.environ.get("AWS_REGION", "us-east-1")
-    logger.info(f"Using region from environment: {region}")
-    return region
-
-
-async def get_clusters_with_metadata(region: str) -> list[Dict[str, Any]]:
-    """
-    Get all ECS clusters in the specified region with their metadata.
-
-    Args:
-        region: AWS region to get clusters from
+    Uses the AWS_REGION environment variable to determine the region.
 
     Returns:
         List of cluster dictionaries with metadata
@@ -53,12 +40,15 @@ async def get_clusters_with_metadata(region: str) -> list[Dict[str, Any]]:
     Raises:
         Exception: If retrieving clusters fails
     """
+    region = os.environ.get("AWS_REGION", "us-east-1")
     logger.info(f"Listing ECS clusters in region: {region}")
 
     try:
-        # List cluster ARNs
-        list_response = await ecs_api_operation(api_operation="ListClusters", api_params={})
+        # Get ECS client (automatically uses AWS_REGION from environment)
+        ecs = await get_aws_client("ecs")
 
+        # List cluster ARNs
+        list_response = ecs.list_clusters()
         cluster_arns = list_response.get("clusterArns", [])
 
         if not cluster_arns:
@@ -68,14 +58,10 @@ async def get_clusters_with_metadata(region: str) -> list[Dict[str, Any]]:
         logger.info(f"Found {len(cluster_arns)} cluster(s) in region {region}")
 
         # Describe clusters to get metadata
-        describe_response = await ecs_api_operation(
-            api_operation="DescribeClusters",
-            api_params={
-                "clusters": cluster_arns,
-                "include": ["ATTACHMENTS", "SETTINGS", "STATISTICS", "TAGS"],
-            },
+        describe_response = ecs.describe_clusters(
+            clusters=cluster_arns,
+            include=["ATTACHMENTS", "SETTINGS", "STATISTICS", "TAGS"],
         )
-
         clusters = describe_response.get("clusters", [])
 
         # Format cluster information
@@ -103,17 +89,18 @@ async def get_clusters_with_metadata(region: str) -> list[Dict[str, Any]]:
         raise Exception(f"Failed to retrieve clusters in region '{region}': {str(e)}") from e
 
 
-def format_clusters_for_display(clusters: list[Dict[str, Any]], region: str) -> str:
+def format_clusters_for_display(clusters: list[Dict[str, Any]]) -> str:
     """
     Format cluster data into a user-friendly display string.
 
     Args:
         clusters: List of cluster dictionaries
-        region: AWS region name
 
     Returns:
         Formatted string with cluster information for display
     """
+    region = os.environ.get("AWS_REGION", "us-east-1")
+
     if not clusters:
         return f"""
 No ECS clusters found in region: {region}
@@ -160,9 +147,7 @@ Or use the AWS Console to create a cluster in the ECS service.
             "  cluster_names=['cluster-name']",
             "",
             "Example:",
-            f"  analyze_ecs_security("
-            f"cluster_names=['{clusters[0].get('cluster_name')}'], "
-            f"region='{region}')",
+            f"  analyze_ecs_security(cluster_names=['{clusters[0].get('cluster_name')}'])",
             "",
         ]
     )

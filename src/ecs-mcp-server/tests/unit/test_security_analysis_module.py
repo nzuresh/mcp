@@ -25,15 +25,14 @@ def test_module_registration():
 
 
 @pytest.mark.anyio
-@patch("awslabs.ecs_mcp_server.modules.security_analysis.get_target_region")
 @patch("awslabs.ecs_mcp_server.modules.security_analysis.get_clusters_with_metadata")
 @patch("awslabs.ecs_mcp_server.modules.security_analysis.format_clusters_for_display")
-async def test_tool_execution_list_clusters(mock_format, mock_list_clusters, mock_get_region):
+@patch.dict("os.environ", {"AWS_REGION": "us-east-1"})
+async def test_tool_execution_list_clusters(mock_format, mock_list_clusters):
     """Test tool execution for listing clusters."""
     from awslabs.ecs_mcp_server.modules import security_analysis
 
     # Setup mocks
-    mock_get_region.return_value = "us-east-1"
     mock_list_clusters.return_value = [
         {
             "cluster_name": "test-cluster",
@@ -68,19 +67,19 @@ async def test_tool_execution_list_clusters(mock_format, mock_list_clusters, moc
 
     # Verify the result
     assert result == "Formatted cluster list"
-    mock_get_region.assert_called_once()
-    mock_list_clusters.assert_called_once_with("us-east-1")
+    mock_list_clusters.assert_called_once()
     mock_format.assert_called_once()
 
 
 @pytest.mark.anyio
-@patch("awslabs.ecs_mcp_server.modules.security_analysis.get_target_region")
-async def test_tool_execution_error_handling(mock_get_region):
+@patch("awslabs.ecs_mcp_server.modules.security_analysis.get_clusters_with_metadata")
+@patch.dict("os.environ", {"AWS_REGION": "us-east-1"})
+async def test_tool_execution_error_handling(mock_list_clusters):
     """Test tool execution error handling."""
     from awslabs.ecs_mcp_server.modules import security_analysis
 
     # Setup mock to raise an exception
-    mock_get_region.side_effect = Exception("Test error")
+    mock_list_clusters.side_effect = Exception("Test error")
 
     # Create a mock FastMCP instance
     mock_mcp = MagicMock(spec=FastMCP)

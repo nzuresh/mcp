@@ -18,13 +18,13 @@ This module provides tools and prompts for analyzing ECS security configurations
 """
 
 import logging
+import os
 
 from fastmcp import FastMCP
 
 from awslabs.ecs_mcp_server.api.security_analysis import (
     format_clusters_for_display,
     get_clusters_with_metadata,
-    get_target_region,
 )
 
 logger = logging.getLogger(__name__)
@@ -75,14 +75,11 @@ def register_module(mcp: FastMCP) -> None:
             - No clusters found: Returns helpful message with cluster creation guidance
         """
         try:
-            # Step 1: Get target region from environment
-            logger.info("Step 1: Getting target region from environment")
-            target_region = get_target_region()
-
-            # Step 2: List clusters for user selection
-            logger.info(f"Step 2: Listing clusters in region '{target_region}' for user selection")
-            clusters = await get_clusters_with_metadata(target_region)
-            return format_clusters_for_display(clusters, target_region)
+            # List clusters for user selection
+            region = os.environ.get("AWS_REGION", "us-east-1")
+            logger.info(f"Listing clusters in region '{region}' for user selection")
+            clusters = await get_clusters_with_metadata()
+            return format_clusters_for_display(clusters)
 
         except Exception as e:
             import traceback
